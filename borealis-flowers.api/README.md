@@ -1,5 +1,5 @@
-11 May 2025 - both of databases are updated and the same: chopme.db and visit-me.db
-17 May 2025 - visit-me.db is deleted, not necessary to have both, we can remove it ang apply migration again
+11 May 2025 — база SQLite: `Data/sqlite/BorealisFlowers.db` (ранее использовались `chopme.db`, `visit-me.db` и `app.db`).
+17 May 2025 — `visit-me.db` удалён как дубликат; при смене имени файла БД обновляйте `ConnectionStrings:DefaultConnection` в `appsettings.json` (и при необходимости в `appsettings.Development.json`).
 
 
 Statistics
@@ -25,5 +25,5 @@ POST /statistics/month с { "monthName": "январь", "year": 2025, "speciali
 
 
 SQL Commands
-sqlite3 chopme.db ".tables" 2>&1
+sqlite3 Data/sqlite/BorealisFlowers.db ".tables" 2>&1
 
