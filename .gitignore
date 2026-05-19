@@ -12,3 +12,7 @@ obj/
 *.user
 *.suo
 appsettings.Development.json
+.dotnet/
+.home/
+.nuget/
+.tmp/
