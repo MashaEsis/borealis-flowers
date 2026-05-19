@@ -1,0 +1,115 @@
+@page "/cabinet/admin"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Все заказы</h1>
+
+    @if (!Session.IsAdmin)
+    {
+        <div class="notice-banner">Только администратор.</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else if (_rows.Count == 0)
+    {
+        <p class="muted-small">Заявок нет.</p>
+    }
+    else
+    {
+        @foreach (OrderRowDto o in _rows)
+        {
+            <article class="card-panel" style="margin-bottom:.85rem;">
+                <p class="muted-small" style="margin:0;">@o.CreatedAt.ToLocalTime():g · @(o.CustomerName ?? "—")</p>
+                <p style="margin:.5rem 0;">@(o.Description ?? "")</p>
+                <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus)</p>
+
+                @if (o.OrderStatus == 3 && o.OrderKind == 1)
+                {
+                    <p class="muted-small">Материалы: @(o.FloristMaterials ?? "—")</p>
+                    <p class="muted-small">Инвентарь: @(o.FloristInventory ?? "—")</p>
+                    <p class="muted-small">Смета: @(o.QuoteTotal?.ToString("N0") ?? "—") ₽</p>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.65rem;">
+                        <button type="button" class="btn btn-primary" @onclick="@(() => AdminDecision(o.Id, 4))">Одобрить</button>
+                        <button type="button" class="btn btn-ghost" @onclick="@(() => AdminDecision(o.Id, 7))">Отклонить</button>
+                    </div>
+                    <div class="field" style="margin-top:.5rem;">
+                        <label>Комментарий администратора</label>
+                        <input type="text" @bind="_adminComment[o.Id]" placeholder="Замечания при отклонении…"/>
+                    </div>
+                }
+                else
+                {
+                    <div class="field" style="max-width:300px;">
+                        <label>Статус (вручную)</label>
+                        <select @onchange="@(e => SetPending(o.Id, e.Value))">
+                            @for (int i = 0; i <= 7; i++)
+                            {
+                                <option value="@i" selected="@(o.OrderStatus == i)">@OrderStateUi.Russian(i)</option>
+                            }
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary" style="margin-top:.5rem;"
+                            @onclick="@(() => Save(o.Id, o.OrderStatus))">Сохранить</button>
+                }
+            </article>
+        }
+    }
+</section>
+
+@code {
+
+    List<OrderRowDto>? _rows;
+
+    readonly Dictionary<Guid, int> _pending = new();
+
+    readonly Dictionary<Guid, string> _adminComment = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+            return;
+
+        await Reload();
+    }
+
+    async Task Reload()
+    {
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/admin/all");
+        }
+        catch
+        {
+            _rows = [];
+        }
+    }
+
+    void SetPending(Guid id, object? v)
+    {
+        if (v is null)
+            return;
+        _pending[id] = int.Parse(v.ToString()!);
+    }
+
+    async Task Save(Guid id, int current)
+    {
+        int st = _pending.TryGetValue(id, out int p) ? p : current;
+        await Api.Http.PutAsJsonAsync(
+            $"orders/{id:D}/state",
+            new UpdateOrderStateDto { OrderStatus = st, Resolution = null });
+        await Reload();
+    }
+
+    async Task AdminDecision(Guid id, int status)
+    {
+        string? comment = _adminComment.TryGetValue(id, out string? c) ? c : null;
+        await Api.Http.PutAsJsonAsync(
+            $"orders/{id:D}/admin-decision",
+            new UpdateOrderStateDto { OrderStatus = status, AdminComment = comment });
+        await Reload();
+    }
+
+}

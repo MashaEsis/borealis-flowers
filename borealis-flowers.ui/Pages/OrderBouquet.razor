@@ -1,0 +1,163 @@
+@page "/order/bouquet"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject NavigationManager Nav
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Заказ букета</h1>
+
+    @if (!Session.IsClient)
+    {
+        <div class="notice-banner">
+            Войдите как клиент, чтобы отправить заявку в базу.
+            <NavLink class="link-accent" href="@LoginHref">Перейти ко входу</NavLink>
+        </div>
+    }
+    else if (_done is Guid gid)
+    {
+        <div class="notice-banner">Заявка создана. Номер: <strong>@gid</strong></div>
+        <p class="muted-small">Флорист будет назначен автоматически. Отслеживайте статус в личном кабинете.</p>
+    }
+    else if (_error is not null)
+    {
+        <div class="notice-banner">@_error</div>
+    }
+    else if (_services is null)
+    {
+        <p class="muted-small">Загружаем каталог…</p>
+    }
+    else if (_services.Count == 0)
+    {
+        <p class="muted-small">Нет услуг в каталоге. <NavLink class="link-accent" href="/services">Каталог</NavLink></p>
+    }
+    else
+    {
+        <p class="muted-small">
+            Выберите букет из каталога (или откройте
+            <NavLink class="link-accent" href="/services">страницу услуг</NavLink>).
+        </p>
+
+        <div class="field">
+            <label>Букет</label>
+            <select @bind="_serviceIdString">
+                @foreach (ServiceRowDto s in _services)
+                {
+                    <option value="@s.Id.ToString("D")">@s.Name — @s.Price.ToString("N0") ₽</option>
+                }
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Комментарий (необязательно)</label>
+            <textarea @bind="_comment" rows="4"
+                      placeholder="Пожелания по оттенкам, размеру, доставке…"></textarea>
+        </div>
+
+        <button class="btn btn-primary" type="button" disabled="@Busy" @onclick="SubmitAsync">
+            @(Busy ? "Отправляем…" : "Отправить заявку")
+        </button>
+    }
+</section>
+
+@code {
+
+    Guid? _done;
+
+    bool Busy;
+
+    List<ServiceRowDto>? _services;
+
+    string _serviceIdString = "";
+
+    string _comment = "";
+
+    string? _error;
+
+    string LoginHref =>
+        $"/login?returnUrl={Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri))}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _services = await Api.Http.GetFromJsonAsync<List<ServiceRowDto>>("services");
+        }
+        catch
+        {
+            _error = "Не удалось загрузить услуги.";
+            _services = [];
+            return;
+        }
+
+        if (_services is null)
+        {
+            _services = [];
+            _error = "Пустой ответ каталога.";
+            return;
+        }
+
+        Uri uri = Nav.ToAbsoluteUri(Nav.Uri);
+        string? q = null;
+        foreach (string part in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int eq = part.IndexOf('=');
+            if (eq > 0 && string.Equals(part[..eq], "serviceId", StringComparison.OrdinalIgnoreCase))
+            {
+                q = Uri.UnescapeDataString(part[(eq + 1)..]);
+                break;
+            }
+        }
+
+        Guid? fromQuery = Guid.TryParse(q, out Guid g) ? g : null;
+        if (fromQuery is Guid gid && _services.Any(s => s.Id == gid))
+            _serviceIdString = gid.ToString("D");
+        else if (_services.Count > 0)
+            _serviceIdString = _services[0].Id.ToString("D");
+    }
+
+    async Task SubmitAsync()
+    {
+        Busy = true;
+        _error = null;
+        try
+        {
+            if (!Guid.TryParse(_serviceIdString, out Guid serviceId) || serviceId == Guid.Empty)
+            {
+                _error = "Выберите букет.";
+                return;
+            }
+
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "orders/bouquet",
+                new PlaceBouquetRequestDto
+                {
+                    ServiceId = serviceId,
+                    Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim(),
+                });
+
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _error = "Услуга не найдена.";
+                return;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось создать заявку.";
+                return;
+            }
+
+            Guid? id = await res.Content.ReadFromJsonAsync<Guid>();
+            _done = id;
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+}

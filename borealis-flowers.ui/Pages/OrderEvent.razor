@@ -1,0 +1,139 @@
+@page "/order/event"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Заказ мероприятия</h1>
+
+    @if (!Session.IsClient)
+    {
+        <div class="notice-banner">
+            <NavLink class="link-accent" href="/login">Войдите</NavLink>, чтобы закрепить слот и создать заявку.
+        </div>
+    }
+    else if (_done is Guid doneId)
+    {
+        <div class="notice-banner">Заявка зарегистрирована. Номер: <strong>@doneId</strong></div>
+    }
+    else if (_slots is null)
+    {
+        <p class="muted-small">Загружаем свободные слоты…</p>
+    }
+    else if (_slots.Count == 0)
+    {
+        <p class="muted-small">Нет свободных слотов — загляните позже.</p>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="notice-banner">@_error</div>
+        }
+
+        <div class="field">
+            <label>Свободный слот</label>
+            <select @bind="_slotIdString">
+                @foreach (AvailableTimeslotDto s in _slots)
+                {
+                    <option value="@s.TimeslotId.ToString("D")">
+                        @s.Date.ToLocalTime().ToString("d") · @FormatH(s.Time) · @s.SpecialistName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Пожелания (описание события)</label>
+            <textarea @bind="_description" rows="4"></textarea>
+        </div>
+
+        <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SubmitAsync">
+            @(_busy ? "Создаём…" : "Забронировать слот")
+        </button>
+    }
+</section>
+
+@code {
+
+    Guid? _done;
+
+    List<AvailableTimeslotDto>? _slots;
+
+    string _slotIdString = "";
+
+    string _description = "";
+
+    string? _error;
+
+    bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _slots = await Api.Http.GetFromJsonAsync<List<AvailableTimeslotDto>>(
+                "events/available-timeslots");
+        }
+        catch
+        {
+            _slots = [];
+        }
+
+        if (_slots is { Count: > 0 })
+            _slotIdString = _slots[0].TimeslotId.ToString("D");
+    }
+
+    async Task SubmitAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            if (!Guid.TryParse(_slotIdString, out Guid tsId))
+            {
+                _error = "Выберите слот.";
+                return;
+            }
+
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "orders/event",
+                new PlaceEventRequestDto
+                {
+                    TimeslotId = tsId,
+                    Description = _description.Trim(),
+                });
+
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _error = "Слот больше недоступен. Обновите страницу.";
+                return;
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                _error = "Слот уже занят.";
+                return;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось создать заявку.";
+                return;
+            }
+
+            Guid? id = await res.Content.ReadFromJsonAsync<Guid>();
+            _done = id;
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    static string FormatH(int hour) => $"{Math.Clamp(hour, 0, 23):D2}:00";
+
+}

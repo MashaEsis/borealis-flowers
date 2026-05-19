@@ -1,3 +1,10 @@
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+.nuget-packages/
+.tmpbuild/
+
 bin/
 obj/
 .vs/

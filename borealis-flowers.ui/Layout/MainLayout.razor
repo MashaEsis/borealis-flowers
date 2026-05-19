@@ -1,0 +1,61 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject FloristCatalogService FloristCatalog
+@inject BrowserStorageService BrowserStorage
+@inject HttpClient WasmHttpClient
+@inject BackendApiClient Api
+@inject AppSessionService AppSession
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <a href="/" class="sidebar-brand">Borealis Flowers</a>
+        <NavMenu/>
+        <footer class="sidebar-footer muted-small">
+            @AppSession.DisplayName · @DescribeRole(AppSession.Role)
+        </footer>
+    </aside>
+
+    <div class="main-area">
+        <main class="page-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+
+    protected override Task OnInitializedAsync()
+    {
+        AppSession.Changed += OnSession;
+        return Task.CompletedTask;
+    }
+
+    void OnSession() =>
+        InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        BackendSettings settings = await BackendSettings.LoadAsync(WasmHttpClient);
+        await FloristCatalog.LoadFloristsAsync(WasmHttpClient, settings);
+        await AppSession.RestoreAsync(BrowserStorage);
+        await AppSession.RefreshMeAsync(Api, BrowserStorage);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() =>
+        AppSession.Changed -= OnSession;
+
+    static string DescribeRole(StudioRole role) =>
+        role switch
+        {
+            StudioRole.Visitor => "гость",
+            StudioRole.Client => "клиент",
+            StudioRole.Florist => "флорист",
+            StudioRole.Admin => "администратор",
+            _ => "",
+        };
+
+}

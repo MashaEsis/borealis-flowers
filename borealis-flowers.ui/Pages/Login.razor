@@ -1,0 +1,96 @@
+@page "/login"
+@layout AuthLayout
+
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject BrowserStorageService Browser
+@inject NavigationManager Nav
+
+<section class="auth-card">
+    <h1 style="margin-top:0;">Вход</h1>
+    <p class="muted-small">Один экран для клиентов, флористов и администраторов — роль определяется автоматически.</p>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="notice-banner">@_error</div>
+    }
+
+    <div class="field">
+        <label>Email</label>
+        <input type="email" @bind="_email" autocomplete="username"/>
+    </div>
+    <div class="field">
+        <label>Пароль</label>
+        <input type="password" class="form-input" @bind="_password" autocomplete="current-password"/>
+    </div>
+
+    <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SubmitAsync">
+        @(_busy ? "Входим…" : "Войти")
+    </button>
+
+    <p class="muted-small" style="margin-top:1.25rem;">
+        Нет аккаунта?
+        <NavLink class="link-accent" href="/register">Регистрация</NavLink>
+    </p>
+</section>
+
+@code {
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    string _email = "";
+
+    string _password = "";
+
+    string? _error;
+
+    bool _busy;
+
+    async Task SubmitAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "auth/login",
+                new LoginRequestDto { Email = _email.Trim(), Password = _password });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Неверный email или пароль.";
+                return;
+            }
+
+            AuthResponseDto? body = await res.Content.ReadFromJsonAsync<AuthResponseDto>();
+            if (body is null)
+            {
+                _error = "Пустой ответ сервера.";
+                return;
+            }
+
+            await Session.ApplyAuthAsync(body, Browser);
+            Nav.NavigateTo(SafeRedirect(ReturnUrl));
+        }
+        catch
+        {
+            _error = "Не удалось связаться с API. Проверьте, что сервер запущен на порту 5298.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    static string SafeRedirect(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+            return "/";
+        string t = returnUrl.Trim();
+        if (t.StartsWith("//", StringComparison.Ordinal) || t.Contains("://", StringComparison.Ordinal))
+            return "/";
+        return t.StartsWith('/') ? t : "/" + t;
+    }
+
+}

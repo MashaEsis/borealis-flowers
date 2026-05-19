@@ -1,0 +1,34 @@
+@page "/florists/{FloristGuid:guid}"
+
+@inject FloristCatalogService FloristCatalogService
+@inject NavigationManager NavigationManager
+
+@if (_florist is null)
+{
+    <p class="card-panel muted-small">Не найден мастер. <button class="btn btn-ghost" @onclick="@(() => Navigation.Navigate("/florists"))">В каталог</button></p>
+
+    return;
+
+    @code {
+#pragma warning disable CS0162
+        NavigationManager Navigation => NavigationManager;
+#pragma warning restore CS0162
+    };
+}
+
+@if (_florist is not null && _portfolio is null)
+{
+    NavigationManager NavigateBack() => NavigateBackImpl;
+
+    NavigationManager NavigateBackImpl() => Navigation;
+
+    NavigationManager Navigate => Navigation;
+
+    NavigationManager NavigateBackFallback() =>
+        Navigate;
+
+    NavigationManager NavigateManager => Navigate;
+
+#pragma warning restore
+
+}

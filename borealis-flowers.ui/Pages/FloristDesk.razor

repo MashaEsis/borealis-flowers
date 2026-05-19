@@ -1,0 +1,336 @@
+@page "/cabinet/florist"
+
+@inject AppSessionService Session
+@inject StudioAppState Studio
+@inject BrowserStorageService Browser
+
+@if (!Session.IsFlorist || Session.ActingFloristId == Guid.Empty)
+{
+    <section class="card-panel notice-banner">
+        Войдите как флорист на странице
+        <NavLink class="link-accent" href="/session">демо-сессии</NavLink>.
+    </section>
+}
+else
+{
+    <section class="card-panel">
+        <h1 style="margin-top:0;">Работа мастера</h1>
+
+        @if (_hint.Length > 0)
+        {
+            <div class="notice-banner">@_hint</div>
+        }
+    </section>
+
+    @foreach (StudioOrderDto o in Studio.WorkflowOrdersFor(Session.ActingFloristId).OrderByDescending(x => x.CreatedAtUtc))
+    {
+        <article class="card-panel" style="margin-top:1rem;">
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <span class="status-pill">
+                        @(o.Kind == OrderKind.Bouquet ? "Букет" :
+                            $"Мероприятие · {OrderUiFormatter.OccasionRussian(o.OccasionKind ?? EventOccasionKind.Wedding)}")
+                    </span>
+
+                    <h2 style="margin:.5rem 0;font-size:1.1rem;">
+                        @(o.CustomerName) · @(o.Phone)</h2>
+
+                    <p class="muted-small">
+                        @(OrderUiFormatter.PhaseRussian(o.Phase, o.Kind)) · план суммы @(o.PriceQuoted.ToString("N0")) ₽
+                    </p>
+                </div>
+
+                @if (o.Kind == OrderKind.Event && o.EventDate is { } dd)
+                {
+                    <span class="muted-small">Дата события: @(dd.ToString())</span>
+                }
+            </div>
+
+            @if (_supplyFor == o.Id)
+            {
+
+                <div class="list-divider">
+                    <label class="muted-small">Строки: «роза Ecuador 120» или «роза Ecuador; пион» с новой строки</label>
+                    <textarea @bind="_rawSupply" rows="4" placeholder="роза Ecuador 120; пион 40&#10;"></textarea>
+
+                    <div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+                        <button type="button" class="btn btn-primary" @onclick="@(() => SendSupplyAsync(o.Id))">Отправить заявку</button>
+
+                        <button type="button" class="btn btn-ghost" @onclick="@HideSupplyUi">Отменить</button>
+                    </div>
+                </div>
+            }
+
+            @if (o.RequiresTripleCompletion && o.Phase == FloristOrderPhase.AwaitingCompletionConfirm)
+
+            {
+
+
+                <p class="muted-small" style="margin:.75rem 0 0;">@OrderUiFormatter.TripleProgress(o)</p>
+
+
+
+            }
+
+
+
+            <div style="margin-top:.75rem;display:flex;flex-wrap:wrap;gap:.45rem;">
+                <button class="btn btn-soft" type="button" @onclick="@(()=>RunAsync(()=>Studio.FloristTakeInWork(o.Id, Session.ActingFloristId)))">
+
+                    В обработке
+
+
+
+                </button>
+
+                @if (o.Kind == OrderKind.Bouquet)
+
+
+
+
+
+                {
+
+
+                    <button class="btn btn-soft" type="button" @onclick="@(()=>RunAsync(()=>Studio.BouquetReadyForDelivery(o.Id, Session.ActingFloristId)))">
+
+                        Готов и отправлен
+
+                    </button>
+
+                    <button class="btn btn-primary" type="button" @onclick="@(()=>RunAsync(()=>Studio.BouquetClose(o.Id, Session.ActingFloristId)))">
+
+                        Завершён
+
+                    </button>
+
+
+
+
+
+
+
+                }
+
+
+
+                else
+
+                {
+
+
+
+
+
+
+                    <button class="btn btn-soft" type="button" @onclick="@(()=>RunAsync(()=>Studio.EventDepartToClient(o.Id, Session.ActingFloristId)))">Выезд
+
+
+
+                    </button>
+
+                    <button class="btn btn-soft" type="button" @onclick="@(()=>RunAsync(()=>Studio.BeginTripleCompletionReview(o.Id, Session.ActingFloristId)))">
+
+                        Запрос согласований
+
+                    </button>
+
+
+
+
+
+                    <button class="btn btn-primary" disabled="@(!(o.Phase == FloristOrderPhase.AwaitingCompletionConfirm))"
+
+
+                            type="button" @onclick="@(()=>RunAsync(()=>Studio.FloristSealTriple(o.Id, Session.ActingFloristId)))">Моё подтверждение</button>
+
+
+
+
+
+
+                }
+
+
+
+                <button class="btn btn-ghost" type="button"
+                        @onclick="@(() => ToggleSupplyDraft(o.Id))">Нужны материалы</button>
+
+
+
+            </div>
+
+
+
+        </article>
+
+
+
+    }
+
+
+
+}
+
+
+
+@code {
+
+
+    Guid? _supplyFor;
+    string _rawSupply = string.Empty;
+
+
+
+    string _hint = "";
+
+
+    void ToggleSupplyDraft(Guid orderId)
+
+
+
+    {
+
+
+        bool open = (_supplyFor == orderId);
+
+
+        HideSupply();
+
+
+        if (!open)
+
+        {
+
+
+            _supplyFor = orderId;
+
+
+            _hint = "";
+
+        }
+
+
+
+    }
+
+
+
+    void HideSupplyUi() =>
+        HideSupply();
+
+
+    void HideSupply()
+
+
+
+    {
+
+
+        _supplyFor = null;
+
+
+
+        _rawSupply = "";
+
+    }
+
+
+
+    async Task SendSupplyAsync(Guid order)
+
+
+
+    {
+
+
+        IEnumerable<FlowerDemandLine> parsed = DemandParser.TryParseDraft(_rawSupply);
+
+
+        IEnumerator<FlowerDemandLine> enumerator = parsed.GetEnumerator();
+
+
+
+        if (!enumerator.MoveNext())
+
+
+
+
+
+
+        {
+
+
+            enumerator.Dispose();
+
+
+            _hint = "Добавьте хотя бы одну строку с количеством.";
+
+
+            return;
+
+
+        }
+
+
+
+        enumerator.Dispose();
+
+
+        List<FlowerDemandLine> buffer = DemandParser.Wrap(parsed);
+
+
+
+
+
+        Studio.CreateSupplyOrder(Session.ActingFloristId, order, buffer);
+
+
+        HideSupply();
+
+
+        await Studio.SaveAsync(Browser);
+
+
+
+
+
+        _hint = "Запрос отправлен администратору.";
+
+
+
+
+
+    }
+
+
+
+    async Task RunAsync(Func<ResultMessage> executor)
+
+
+
+
+
+
+    {
+
+
+        ResultMessage response = executor();
+
+
+        bool fail = !(response.Success);
+
+
+        _hint = fail ? response.Message : string.Empty;
+
+
+
+        await Studio.SaveAsync(Browser);
+
+
+
+    }
+
+
+
+}

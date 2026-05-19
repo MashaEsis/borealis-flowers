@@ -1,0 +1,75 @@
+@page "/cabinet/admin/applications"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Заявки флористов</h1>
+
+    @if (!Session.IsAdmin)
+    {
+        <div class="notice-banner">Только администратор.</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else if (_rows.Count == 0)
+    {
+        <p class="muted-small">Нет заявок в статусе «на рассмотрении».</p>
+    }
+    else
+    {
+        @foreach (FloristApplicationDto a in _rows)
+        {
+            <article class="card-panel" style="margin-bottom:1rem;">
+                <p class="muted-small" style="margin:0;">@a.CreatedAt.ToLocalTime():g · @a.CustomerEmail</p>
+                <h2 style="margin:.5rem 0;font-size:1.05rem;">@a.FullName</h2>
+                <p class="muted-small">Опыт: @a.Experience</p>
+                <p class="muted-small">Портфолио: @a.PortfolioNotes</p>
+                <p class="muted-small">Мотивация: @a.Motivation</p>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
+                    <button type="button" class="btn btn-primary" @onclick="@(() => Approve(a.Id))">Одобрить</button>
+                    <button type="button" class="btn btn-ghost" @onclick="@(() => Decline(a.Id))">Отклонить</button>
+                </div>
+            </article>
+        }
+    }
+</section>
+
+@code {
+
+    List<FloristApplicationDto>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+            return;
+
+        await Reload();
+    }
+
+    async Task Reload()
+    {
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<FloristApplicationDto>>("florist-applications/pending");
+        }
+        catch
+        {
+            _rows = [];
+        }
+    }
+
+    async Task Approve(Guid id)
+    {
+        await Api.Http.PostAsJsonAsync($"florist-applications/{id:D}/approve", new { });
+        await Reload();
+    }
+
+    async Task Decline(Guid id)
+    {
+        await Api.Http.PostAsJsonAsync($"florist-applications/{id:D}/decline", new { });
+        await Reload();
+    }
+
+}

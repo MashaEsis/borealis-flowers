@@ -1,0 +1,75 @@
+@page "/services"
+@inject BackendApiClient Api
+@inject NavigationManager Nav
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Услуги / Каталог букетов</h1>
+    <p class="muted-small">Все позиции из базы. Фото — демо (Picsum) по id услуги.</p>
+</section>
+
+@if (_error is not null)
+{
+    <section class="card-panel notice-banner">@_error</section>
+}
+else if (_items is null)
+{
+    <p class="muted-small">Загрузка…</p>
+}
+else if (_items.Count == 0)
+{
+    <section class="card-panel">Пустой каталог.</section>
+}
+else
+{
+    <div class="catalog-grid">
+        @foreach (ServiceRowDto s in _items)
+        {
+            string img = $"https://picsum.photos/seed/bouquet-{s.Id:N}/480/300";
+            string preview = ShortDesc(s);
+            <article class="product-card">
+                <img src="@img" alt="" width="480" height="300" loading="lazy"/>
+                <div class="product-card-body">
+                    <p class="muted-small" style="margin:0;">@s.SpecializationName</p>
+                    <h2 style="margin:.35rem 0;font-size:1.05rem;">@s.Name</h2>
+                    <p class="muted-small" style="margin:.25rem 0 .6rem;">@preview</p>
+                    <p class="muted-small">
+                        <strong>@s.Price.ToString("N0")</strong> ₽
+                        @if (s.EstimatedTime is int m)
+                        {
+                            <span> · ~@m мин</span>
+                        }
+                    </p>
+                    <NavLink class="btn btn-soft" href=@($"/services/{s.Id:D}") style="text-decoration:none;display:inline-flex;margin-top:.5rem;">Подробнее</NavLink>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+
+    List<ServiceRowDto>? _items;
+
+    string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _items = await Api.Http.GetFromJsonAsync<List<ServiceRowDto>>("services");
+        }
+        catch
+        {
+            _error = "Не удалось загрузить услуги. Проверьте API.";
+        }
+    }
+
+    static string ShortDesc(ServiceRowDto s)
+    {
+        string? d = string.IsNullOrWhiteSpace(s.Description) ? s.Name : s.Description;
+        if (d.Length <= 50)
+            return d;
+        return d[..50].TrimEnd() + "…";
+    }
+
+}

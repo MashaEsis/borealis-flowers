@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>NonFactors.Grid.Core.Mvc6</id>
+    <version>8.0.0</version>
+    <title>NonFactors.Grid.Core.Mvc6</title>
+    <authors>NonFactors</authors>
+    <owners>NonFactors</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://aspnet-core-grid.azurewebsites.net/</projectUrl>
+    <description>Mvc.Grid core dll without content files.</description>
+    <copyright>Copyright © NonFactors</copyright>
+    <language>en-GB</language>
+    <tags>asp net mvc grid</tags>
+    <repository type="git" url="https://gitlab.com/NonFactors/AspNetCore.Grid.git" commit="7c83564acf6bcab476f35ac39b1f7b20f7e08ef1" />
+    <frameworkReferences>
+      <group targetFramework="net6.0">
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+</package>

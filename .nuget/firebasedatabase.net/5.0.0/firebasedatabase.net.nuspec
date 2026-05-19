@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>FirebaseDatabase.net</id>
+    <version>5.0.0</version>
+    <authors>Step Up Labs, Inc.</authors>
+    <licenseUrl>https://github.com/step-up-labs/firebase-database-dotnet/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/step-up-labs/firebase-database-dotnet</projectUrl>
+    <iconUrl>https://github.com/step-up-labs/firebase-database-dotnet/raw/master/art/FirebaseLogo.128x128.png</iconUrl>
+    <description>Complex C# library for Firebase Realtime Database built on top of Firebase REST API. Among others it supports following:
+
+      * Offline storage
+      * Querying using available filters
+      * Passing in authentication token
+      * Streaming online changes
+      * Directly Posting / Putting / Patching online data
+
+      Streaming changes (both online and offline) are done using Reactive Extensions.</description>
+    <copyright>Step Up Labs, Inc. 2019</copyright>
+    <tags>Firebase Database Realtime</tags>
+    <repository type="git" url="https://github.com/step-up-labs/firebase-database-dotnet.git" commit="0e2730a04ca486d1358e7ccd8eabf7431000d1c4" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="LiteDB" version="5.0.17" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.3" exclude="Build,Analyzers" />
+        <dependency id="System.Reactive" version="6.0.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
