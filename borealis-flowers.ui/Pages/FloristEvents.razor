@@ -1,0 +1,60 @@
+@page "/cabinet/florist/events"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Мои мероприятия</h1>
+
+    @if (!Session.IsFlorist && !Session.IsAdmin)
+    {
+        <div class="notice-banner">Доступно флористам и администраторам с профилем мастера.</div>
+    }
+    else if (Session.ActingFloristId == Guid.Empty)
+    {
+        <div class="notice-banner">Нет привязки к карточке флориста.</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        var eventsOnly = _rows.Where(o => (o.Description ?? "").Contains("[Мероприятие]", StringComparison.Ordinal)).ToList();
+        if (eventsOnly.Count == 0)
+        {
+            <p class="muted-small">Пока нет заявок на мероприятия.</p>
+        }
+        else
+        {
+            @foreach (OrderRowDto o in eventsOnly)
+            {
+                <article class="card-panel" style="margin-bottom:.75rem;">
+                    <p class="muted-small" style="margin:0;">@o.CreatedAt.ToLocalTime():g</p>
+                    <p style="margin:.35rem 0;">@(o.Description ?? "")</p>
+                    <p class="status-pill">@OrderStateUi.Russian(o.State)</p>
+                </article>
+            }
+        }
+    }
+</section>
+
+@code {
+
+    List<OrderRowDto>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if ((!Session.IsFlorist && !Session.IsAdmin) || Session.ActingFloristId == Guid.Empty)
+            return;
+
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/florist");
+        }
+        catch
+        {
+            _rows = [];
+        }
+    }
+
+}

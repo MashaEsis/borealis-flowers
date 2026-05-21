@@ -1,0 +1,66 @@
+@page "/florists/{FloristGuid:guid}/portfolio"
+
+@inject FloristCatalogService FloristCatalogService
+@inject NavigationManager Navigation
+
+@if (_found is false)
+{
+    <section class="card-panel muted-small">
+        Мастер не найден.
+        <div style="margin-top:12px;"><button type="button" class="btn btn-ghost" @onclick="@GoBack">К списку</button></div>
+    </section>
+}
+else if (_found is true && _member is not null)
+{
+    <section class="card-panel">
+        <div class="two-column" style="align-items:center;">
+            <div>
+                <p class="status-pill">Портфолио</p>
+                <h1 style="margin:.5rem 0 .25rem;">@_member.FullName</h1>
+                <p class="muted-small" style="margin:0;line-height:1.5;">
+                    @(string.IsNullOrWhiteSpace(_member.City) ? "Город уточняется у флориста" : _member.City)
+                    · @(string.IsNullOrWhiteSpace(_member.Specialization) ? "Направление уточняется" : _member.Specialization)
+                </p>
+                <div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:.6rem;">
+                    <NavLink class="btn btn-primary" href="/services" style="text-decoration:none;display:inline-flex;align-items:center;">Каталог букетов</NavLink>
+                    <NavLink class="btn btn-soft" href="/florists" style="text-decoration:none;display:inline-flex;align-items:center;">В каталог</NavLink>
+                </div>
+            </div>
+            <img class="fl-photo" src="@_member.ImgUrl" alt="" />
+        </div>
+    </section>
+
+    <section class="card-panel" style="margin-top:1rem;">
+        <h2 style="margin-top:0;">Работы студии</h2>
+        <p class="muted-small">Подборочные образы только для интерфейса — подключите собственную медиатеку в API позже.</p>
+
+        <div class="fl-grid" style="margin-top:1.25rem;">
+            @foreach (string url in FloristCatalogService.BuildPortfolioGallery(FloristGuid))
+            {
+                <figure style="margin:0;">
+                    <img class="fl-photo" src="@url" loading="lazy" alt="Работа" />
+                </figure>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    FloristVm? _member;
+    bool? _found;
+
+    [Parameter]
+    public Guid FloristGuid { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        FloristVm? hit = FloristCatalogService.Cached.FirstOrDefault(f => f.Id == FloristGuid);
+        _found = hit is not null;
+        _member = hit;
+
+        base.OnParametersSet();
+    }
+
+    void GoBack() =>
+        Navigation.NavigateTo("/florists");
+}

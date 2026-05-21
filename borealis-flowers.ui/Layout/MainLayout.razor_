@@ -1,0 +1,5 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject StudioAppState StudioState
+@inject FloristCatalogService FloristCatalogService
+@inject BrowserStorageStorageAbstraction Wrong

@@ -1,0 +1,139 @@
+@page "/services/{Id:guid}"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject NavigationManager Nav
+
+<section class="card-panel">
+    @if (_error is not null)
+    {
+        <div class="notice-banner">@_error</div>
+    }
+    else if (_svc is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        string img = $"https://picsum.photos/seed/bouquet-{_svc.Id:N}/960/600";
+        <div class="service-detail-layout">
+            <div>
+                <img src="@img" alt="" width="960" height="600" loading="lazy" style="max-width:100%;height:auto;border-radius:10px;"/>
+            </div>
+            <div>
+                <p class="muted-small">@_svc.SpecializationName</p>
+                <h1 style="margin-top:.35rem;">@_svc.Name</h1>
+                <p style="font-size:1.15rem;margin:.75rem 0;">
+                    <strong>@_svc.Price.ToString("N0")</strong> ₽
+                    @if (_svc.EstimatedTime is int m)
+                    {
+                        <span class="muted-small"> · примерно @m мин изготовления</span>
+                    }
+                </p>
+                <p class="muted-small" style="line-height:1.5;">
+                    @(string.IsNullOrWhiteSpace(_svc.Description) ? "Описание уточняется при заказе." : _svc.Description)
+                </p>
+                <p class="muted-small" style="margin-top:1rem;">
+                    Состав и оттенки можно согласовать с флористом после оформления.
+                </p>
+
+                @if (_ordered is Guid oid)
+                {
+                    <div class="notice-banner" style="margin-top:1rem;">Заказ создан: <strong>@oid</strong>. Следите в «Мои заказы».</div>
+                }
+                else if (_showConfirm && Session.IsClient)
+                {
+                    <div class="card-panel" style="margin-top:1rem;background:rgba(0,0,0,.02);">
+                        <h2 style="margin-top:0;font-size:1rem;">Подтверждение</h2>
+                        <p class="muted-small">@_svc.Name — @_svc.Price.ToString("N0") ₽</p>
+                        <div class="field">
+                            <label>Комментарий (необязательно)</label>
+                            <textarea @bind="_comment" rows="3" placeholder="Адрес, пожелания по оттенкам…"></textarea>
+                        </div>
+                        <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SubmitOrderAsync">
+                            @(_busy ? "Отправка…" : "Подтвердить заказ")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-primary" style="margin-top:1.25rem;" type="button" @onclick="StartOrderAsync">
+                        Оформить заказ
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    ServiceRowDto? _svc;
+
+    string? _error;
+
+    bool _showConfirm;
+
+    bool _busy;
+
+    string _comment = "";
+
+    Guid? _ordered;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _svc = null;
+        try
+        {
+            ServiceRowDto? dto = await Api.Http.GetFromJsonAsync<ServiceRowDto>($"services/{Id:D}");
+            _svc = dto;
+        }
+        catch
+        {
+            _error = "Услуга не найдена или API недоступен.";
+        }
+    }
+
+    void StartOrderAsync()
+    {
+        if (!Session.IsClient)
+        {
+            string ret = Uri.EscapeDataString(Nav.Uri);
+            Nav.NavigateTo($"/login?returnUrl={ret}");
+            return;
+        }
+
+        _showConfirm = true;
+    }
+
+    async Task SubmitOrderAsync()
+    {
+        if (_svc is null)
+            return;
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "orders/bouquet",
+                new PlaceBouquetRequestDto { ServiceId = _svc.Id, Comment = _comment.Trim() });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось оформить заказ.";
+                return;
+            }
+
+            Guid? id = await res.Content.ReadFromJsonAsync<Guid>();
+            _ordered = id;
+            _showConfirm = false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+}

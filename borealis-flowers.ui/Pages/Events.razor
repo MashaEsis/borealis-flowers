@@ -1,0 +1,177 @@
+@page "/events"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject FloristCatalogService FloristCatalog
+@inject NavigationManager Nav
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Мероприятия</h1>
+    <p class="muted-small">Заявка на оформление: только для авторизованных клиентов.</p>
+</section>
+
+@if (!Session.IsVisitor)
+{
+    @if (!Session.IsClient)
+    {
+        <section class="card-panel notice-banner">Раздел оформления доступен клиентам. Войдите как клиент.</section>
+    }
+    else if (_sentFlorist is string sentName)
+    {
+        <section class="card-panel notice-banner">
+            Заявка отправлена флористу <strong>@sentName</strong>. Ожидайте согласования.
+        </section>
+    }
+    else
+    {
+        <section class="card-panel">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="notice-banner">@_error</div>
+            }
+
+            <div class="field">
+                <label>Тип мероприятия</label>
+                <select @bind="_eventTypeInt" class="form-select">
+                    <option value="0">Свадьба</option>
+                    <option value="1">Корпоратив</option>
+                    <option value="2">День рождения</option>
+                    <option value="3">Юбилей</option>
+                    <option value="4">Другое</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label>Дата и время (местные)</label>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                    <input type="date" @bind="_date" class="form-input"/>
+                    <input type="time" @bind="_time" class="form-input"/>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Место проведения</label>
+                <input type="text" @bind="_venue" placeholder="Адрес или ссылка на карту"/>
+            </div>
+
+            <div class="field">
+                <label>Флорист</label>
+                @if (!FloristCatalog.Cached.Any())
+                {
+                    <p class="muted-small">Загрузка списка флористов…</p>
+                }
+                else
+                {
+                    <select @bind="_floristIdString" class="form-select">
+                        @foreach (FloristVm f in FloristCatalog.Cached)
+                        {
+                            <option value="@f.Id.ToString("D")">@f.FullName · @f.City</option>
+                        }
+                    </select>
+                }
+            </div>
+
+            <div class="field">
+                <label>Описание пожеланий</label>
+                <textarea @bind="_wish" rows="4" placeholder="Цветовая гамма, стиль, особые требования…"></textarea>
+            </div>
+
+            <div class="field">
+                <label>Бюджет (₽, необязательно)</label>
+                <input type="number" step="100" min="0" @bind="_budget"/>
+            </div>
+
+            <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SubmitAsync">
+                @(_busy ? "Отправка…" : "Отправить заявку")
+            </button>
+        </section>
+    }
+}
+else
+{
+    <section class="card-panel notice-banner">
+        <NavLink class="link-accent" href=@($"/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}")>Войдите</NavLink>,
+        чтобы оформить заявку на мероприятие.
+    </section>
+}
+
+@code {
+
+    int _eventTypeInt;
+
+    DateTime _date = DateTime.Today;
+
+    DateTime _time = DateTime.Today.AddHours(12);
+
+    string _venue = "";
+
+    string _floristIdString = "";
+
+    string _wish = "";
+
+    double? _budget;
+
+    string? _error;
+
+    bool _busy;
+
+    string? _sentFlorist;
+
+    protected override void OnInitialized()
+    {
+        if (FloristCatalog.Cached.Count > 0 && string.IsNullOrEmpty(_floristIdString))
+            _floristIdString = FloristCatalog.Cached[0].Id.ToString("D");
+    }
+
+    async Task SubmitAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_venue))
+        {
+            _error = "Укажите место проведения.";
+            return;
+        }
+
+        if (!Guid.TryParse(_floristIdString, out Guid specId))
+        {
+            _error = "Выберите флориста.";
+            return;
+        }
+
+        var startLocal = _date.Date + _time.TimeOfDay;
+        DateTime utc = DateTime.SpecifyKind(startLocal, DateTimeKind.Local).ToUniversalTime();
+
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "orders/event-plan",
+                new PlaceEventPlanRequestDto
+                {
+                    EventType = _eventTypeInt,
+                    EventStartsAtUtc = utc,
+                    Venue = _venue.Trim(),
+                    SpecialistId = specId,
+                    WishNotes = _wish.Trim(),
+                    Budget = _budget,
+                });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось отправить заявку.";
+                return;
+            }
+
+            FloristVm? f = FloristCatalog.Cached.FirstOrDefault(x => x.Id == specId);
+            _sentFlorist = f?.FullName ?? "флористу";
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+}
