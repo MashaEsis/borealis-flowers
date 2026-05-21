@@ -1,0 +1,53 @@
+﻿@inject AppSessionService App
+@inject BrowserStorageService Browser
+@inject NavigationManager Nav
+
+<nav class="sidebar-nav">
+    <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All">Главная</NavLink>
+    <NavLink class="sidebar-link" href="/services">Услуги · каталог</NavLink>
+    @if (App.Role is not StudioRole.Florist)
+    {
+        <NavLink class="sidebar-link" href="/events">Мероприятия</NavLink>
+    }
+
+    @if (App.Role is StudioRole.Client)
+    {
+        <NavLink class="sidebar-link" href="/cabinet/client">Мои заказы</NavLink>
+        <NavLink class="sidebar-link" href="/services">Заказать букет</NavLink>
+        <NavLink class="sidebar-link" href="/events">Мероприятие</NavLink>
+        <NavLink class="sidebar-link" href="/apply/florist">Стать флористом</NavLink>
+    }
+
+    @if (App.Role is StudioRole.Florist or StudioRole.Admin)
+    {
+        <NavLink class="sidebar-link" href="/cabinet/florist">Мои заказы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/events">Мои мероприятия</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/customers">Клиенты</NavLink>
+    }
+
+    @if (App.Role is StudioRole.Admin)
+    {
+        <NavLink class="sidebar-link" href="/cabinet/admin/applications">Заявки флористов</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/services">Управление услугами</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin">Все заказы</NavLink>
+    }
+
+    @if (App.IsVisitor)
+    {
+        <NavLink class="sidebar-link sidebar-link-accent" href="/login">Войти</NavLink>
+    }
+    else
+    {
+        <button type="button" class="sidebar-link sidebar-link-button" @onclick="SignOutAsync">Выйти</button>
+    }
+</nav>
+
+@code {
+
+    async Task SignOutAsync()
+    {
+        await App.SignOutAsync(Browser);
+        Nav.NavigateTo("/", true);
+    }
+
+}

@@ -6,6 +6,7 @@ public class ServiceDto
     public Guid SpecializationId { get; set; }
     public string SpecializationName { get; set; }
     public string Name { get; set; }
+    public string? Description { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
 }

@@ -1,0 +1,75 @@
+@page "/cabinet/admin/services"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Управление каталогом</h1>
+    @if (!Session.IsAdmin)
+    {
+        <div class="notice-banner">Нужны права администратора.</div>
+    }
+    else if (_services is null || _specs is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        <h2 style="font-size:1.05rem;">Услуги</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+            <thead>
+            <tr style="text-align:left;border-bottom:1px solid var(--stroke);">
+                <th style="padding:.45rem;">Название</th>
+                <th style="padding:.45rem;">Специализация</th>
+                <th style="padding:.45rem;">Цена</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (ServiceRowDto s in _services)
+            {
+                <tr>
+                    <td style="padding:.45rem;">@s.Name</td>
+                    <td style="padding:.45rem;">@s.SpecializationName</td>
+                    <td style="padding:.45rem;">@s.Price.ToString("N0") ₽</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <h2 style="font-size:1.05rem;margin-top:1.5rem;">Специализации</h2>
+        <ul>
+            @foreach (SpecializationRowDto sp in _specs)
+            {
+                <li>@sp.Name @(sp.IsActive ? "" : "(выкл.)")</li>
+            }
+        </ul>
+
+        <p class="muted-small" style="margin-top:1rem;">
+            Правки цен и слотов — через эндпоинты <code>admin/catalog/*</code> или Swagger на API.
+        </p>
+    }
+</section>
+
+@code {
+
+    List<ServiceRowDto>? _services;
+
+    List<SpecializationRowDto>? _specs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+            return;
+
+        try
+        {
+            _services = await Api.Http.GetFromJsonAsync<List<ServiceRowDto>>("admin/catalog/services");
+            _specs = await Api.Http.GetFromJsonAsync<List<SpecializationRowDto>>("admin/catalog/specializations");
+        }
+        catch
+        {
+            _services = [];
+            _specs = [];
+        }
+    }
+
+}

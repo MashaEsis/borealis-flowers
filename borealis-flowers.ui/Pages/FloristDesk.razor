@@ -1,0 +1,186 @@
+@page "/cabinet/florist"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Мои заказы</h1>
+
+    @if (!Session.IsFlorist && !Session.IsAdmin)
+    {
+        <div class="notice-banner">Раздел для флористов и администраторов.</div>
+    }
+    else if ((Session.IsFlorist || Session.IsAdmin) && Session.ActingFloristId == Guid.Empty)
+    {
+        <div class="notice-banner">У учётной записи нет привязки к профилю флориста.</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="notice-banner">@_error</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else if (_rows.Count == 0)
+    {
+        <p class="muted-small">Нет активных заказов.</p>
+    }
+    else
+    {
+        @foreach (OrderRowDto o in _rows)
+        {
+            <article class="card-panel" style="margin-bottom:.85rem;">
+                <p class="status-pill">
+                    @(o.OrderKind == 1 ? "Мероприятие" : "Букет") · @OrderStateUi.Russian(o.OrderStatus)
+                </p>
+                <p class="muted-small" style="margin:.4rem 0 .2rem;">@o.CreatedAt.ToLocalTime():g</p>
+                <p style="margin:0 .2rem .75rem;">@(o.Description ?? "")</p>
+
+                @if (o.OrderKind == 1 && o.OrderStatus == 2)
+                {
+                    <div class="field">
+                        <label>Материалы / цветы</label>
+                        <textarea rows="2" @bind="_mat[o.Id]"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Инвентарь</label>
+                        <textarea rows="2" @bind="_inv[o.Id]"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Смета (₽)</label>
+                        <input type="number" step="100"
+                               value="@(_quote.ContainsKey(o.Id) ? _quote[o.Id]?.ToString() : "")"
+                               @onchange="@(e => SetQuote(o.Id, e.Value))"/>
+                    </div>
+                }
+
+                <div class="field" style="max-width:420px;">
+                    <label>Смена статуса</label>
+                    <select @onchange="@(e => SetPending(o.Id, e.Value))">
+                        @foreach (var opt in StatusOptions(o))
+                        {
+                            <option value="@opt.V" selected="@(o.OrderStatus==opt.V)">@opt.Label</option>
+                        }
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary" style="margin-top:.5rem;"
+                        @onclick="@(() => SaveState(o))">
+                    Применить
+                </button>
+            </article>
+        }
+    }
+</section>
+
+<section class="card-panel">
+    <h2 style="margin-top:0;font-size:1.1rem;">История выполненных</h2>
+    @if (_hist is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else if (_hist.Count == 0)
+    {
+        <p class="muted-small">Пока пусто.</p>
+    }
+    else
+    {
+        @foreach (OrderRowDto o in _hist)
+        {
+            <p class="muted-small" style="margin:.35rem 0;">@o.CreatedAt.ToLocalTime():g · @(o.Description ?? "")</p>
+        }
+    }
+</section>
+
+@code {
+
+    List<OrderRowDto>? _rows;
+
+    List<OrderRowDto>? _hist;
+
+    string? _error;
+
+    readonly Dictionary<Guid, int> _pending = new();
+
+    readonly Dictionary<Guid, string> _mat = new();
+
+    readonly Dictionary<Guid, string> _inv = new();
+
+    readonly Dictionary<Guid, double?> _quote = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if ((!Session.IsFlorist && !Session.IsAdmin) || Session.ActingFloristId == Guid.Empty)
+            return;
+
+        await Reload();
+    }
+
+    async Task Reload()
+    {
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/florist");
+            _hist = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/florist/history");
+        }
+        catch
+        {
+            _error = "Не удалось загрузить заказы.";
+        }
+    }
+
+    void SetPending(Guid id, object? v)
+    {
+        if (v is null)
+            return;
+        _pending[id] = int.Parse(v.ToString()!);
+    }
+
+    async Task SaveState(OrderRowDto o)
+    {
+        int st = _pending.TryGetValue(o.Id, out int p) ? p : o.OrderStatus;
+        var dto = new UpdateOrderStateDto { OrderStatus = st, Resolution = null };
+        if (st == 3 && o.OrderKind == 1)
+        {
+            dto.FloristMaterials = _mat.GetValueOrDefault(o.Id);
+            dto.FloristInventory = _inv.GetValueOrDefault(o.Id);
+            dto.QuoteTotal = _quote.GetValueOrDefault(o.Id);
+        }
+
+        await Api.Http.PutAsJsonAsync($"orders/{o.Id:D}/state", dto);
+        await Reload();
+    }
+
+    void SetQuote(Guid id, object? v)
+    {
+        if (v is null || string.IsNullOrWhiteSpace(v.ToString()))
+        {
+            _quote.Remove(id);
+            return;
+        }
+
+        if (double.TryParse(v.ToString(), out double d))
+            _quote[id] = d;
+    }
+
+    static IEnumerable<(int V, string Label)> StatusOptions(OrderRowDto o)
+    {
+        if (o.OrderKind == 0)
+        {
+            yield return (0, "Новый");
+            yield return (1, "В обработке");
+            yield return (5, "Готов к выдаче");
+            yield return (7, "Отклонён");
+        }
+        else
+        {
+            yield return (0, "Новый");
+            yield return (2, "Согласование материалов");
+            yield return (3, "Ожидает одобрения");
+            yield return (4, "Подтверждён");
+            yield return (1, "В работе");
+            yield return (5, "Готов");
+            yield return (7, "Отклонён");
+        }
+    }
+
+}

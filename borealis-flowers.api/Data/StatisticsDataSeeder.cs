@@ -26,7 +26,7 @@ public static class StatisticsDataSeeder
             // Close the broken connection so file handles are released
             await db.Database.CloseConnectionAsync();
 
-            // Extract file path from connection string (e.g. "Data Source=chopme.db")
+            // Extract file path from the connection string (e.g. "Data Source=Data/sqlite/BorealisFlowers.db")
             var connectionString = db.Database.GetConnectionString() ?? "";
             var dbPath = connectionString
                 .Split(';')

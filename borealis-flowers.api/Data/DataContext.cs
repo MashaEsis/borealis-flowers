@@ -3,13 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace borealis_flowers.api.Data
 {
-    public class DataContext(IConfiguration configuration) : DbContext
+    public class DataContext : DbContext
     {
-        protected readonly IConfiguration Configuration = configuration;
-
-        protected override void OnConfiguring(DbContextOptionsBuilder options)
+        public DataContext(DbContextOptions<DataContext> options)
+            : base(options)
         {
-            options.UseSqlite(Configuration.GetConnectionString("DefaultConnection"));
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -68,6 +66,21 @@ namespace borealis_flowers.api.Data
                 );
             #endregion
 
+            modelBuilder.Entity<Customer>()
+                .HasOne<Specialist>()
+                .WithMany()
+                .HasForeignKey(c => c.SpecialistId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<FloristApplication>()
+                .HasIndex(a => a.CustomerId);
+
+            modelBuilder.Entity<Request>()
+                .HasOne(r => r.Service)
+                .WithMany()
+                .HasForeignKey(r => r.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             #region DateSchedule
             modelBuilder.Entity<DateSchedule>().HasData(
                 new DateSchedule { Id = Guid.Parse("20f92d7b-adec-49c3-88b0-374f45f3e728"), SpecialistId = Guid.Parse("dfe327cd-3efc-42f5-8dfc-f3bce55a49b7"), Date = new DateTime(2023, 7, 13), IsWorkingDay = true, IsAvailable = false },
@@ -87,5 +100,6 @@ namespace borealis_flowers.api.Data
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Request> Requests { get; set; }
         public DbSet<HistoryTimeslot> HistoryTimeslots { get; set; }
+        public DbSet<FloristApplication> FloristApplications { get; set; }
     }
 }

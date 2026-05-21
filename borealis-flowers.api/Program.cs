@@ -1,7 +1,15 @@
+using System.Text;
 using borealis_flowers.api.Data;
+using borealis_flowers.api.Data.Models;
+using borealis_flowers.api.Features.AdminCatalog;
+using borealis_flowers.api.Features.Auth;
 using borealis_flowers.api.Features.Customers;
+using borealis_flowers.api.Features.Directory;
+using borealis_flowers.api.Features.FloristApplications;
 using borealis_flowers.api.Features.HistoryTimeslots;
 using borealis_flowers.api.Features.Images;
+using borealis_flowers.api.Features.Orders;
+using borealis_flowers.api.Features.PublicEvents;
 using borealis_flowers.api.Features.Requests;
 using borealis_flowers.api.Features.Services;
 using borealis_flowers.api.Features.Specialists;
@@ -9,15 +17,50 @@ using borealis_flowers.api.Features.Specializations;
 using borealis_flowers.api.Features.Statistics;
 using borealis_flowers.api.Features.Timeslots;
 using borealis_flowers.api.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-var builder = WebApplication.CreateBuilder(args);
+string sqliteConnection = SqliteConnectionResolver.Resolve(
+    builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException(
+            "Задайте ConnectionStrings:DefaultConnection (см. appsettings.json)."),
+    builder.Environment.ContentRootPath);
 
 builder.Services.AddControllers();
-/* Database Context */
-builder.Services.AddDbContext<DataContext>();
 
-/* Services */
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+JwtOptions jwtOptions =
+    builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Секция Jwt обязательна.");
+if (string.IsNullOrEmpty(jwtOptions.Key) || jwtOptions.Key.Length < 32)
+    throw new InvalidOperationException("Jwt:Key должен быть не короче 32 символов.");
+
+builder.Services.AddSingleton<JwtTokenService>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key)),
+            ClockSkew = TimeSpan.FromMinutes(2),
+        };
+    });
+builder.Services.AddAuthorization();
+
+builder.Services.AddDbContext<DataContext>(options => options.UseSqlite(sqliteConnection));
+
 builder.Services
     .AddServices()
     .AddCache()
@@ -25,20 +68,39 @@ builder.Services
     .AddConfigureOption(builder.Configuration)
     .AddImageProcessing();
 
-/* Admin */
-// // builder.Services.AddCoreAdmin();
-
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Borealis Flowers API", Version = "v1" });
+    c.AddSecurityDefinition(
+        "bearer",
+        new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "JWT Authorization header: Bearer {token}",
+        });
+    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("bearer", document)] = [],
+    });
+});
 
-/* Swagger */
-builder.Services.AddSwaggerGen();
-
-/* Add Antiforgery */
 builder.Services.AddAntiforgery();
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
-/* Protect Admin Middleware */
+EnsureSqliteDataDirectory(sqliteConnection);
+
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    DataContext db = scope.ServiceProvider.GetRequiredService<DataContext>();
+    LegacySqliteMigrationBaseline.StampInitialMigrationIfLegacyDatabase(db);
+    db.Database.Migrate();
+    await EnsureSeedAdminAsync(db);
+}
+
 app.UseMiddleware<CoreAdminProtectionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -50,37 +112,91 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseHttpsRedirection();
 
-//TODO: remove local ip and figure how to fix CORS
 app.UseCors(policy => policy
-    .WithOrigins("http://localhost:5000", "https://localhost:5001", "https://localhost:44349")
+    .WithOrigins(
+        "http://localhost:5000",
+        "https://localhost:5001",
+        "https://localhost:44349",
+        "http://localhost:5298",
+        "https://localhost:7027",
+        "http://localhost:5185",
+        "https://localhost:7094")
     .AllowAnyMethod()
     .AllowAnyHeader());
 
-/* Add Antiforgery middleware */
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
-/* Endpoints */
 app.SpecialistsEndpointsRegistration();
 app.ServicesEndpointsRegistration();
 app.SpecializationsEndpointsRegistration();
 app.CustomersEndpointsRegistration();
-// // app.SchedulesEndpointsRegistration();
-// // app.WorkingDaysEndpointsRegistration();
 app.TimeslotsEndpointsRegistration();
 app.ImagesEndpointsRegistration();
 app.StatisticsNewEndpointsRegistration();
 app.TimeslotsHistoryEndpointsRegistration();
 app.RequestsEndpointsRegistration();
+app.PublicEventsEndpointsRegistration();
+
+app.AuthEndpointsRegistration();
+app.FloristApplicationsEndpointsRegistration();
+app.OrdersEndpointsRegistration();
+app.StaffDirectoryEndpointsRegistration();
+app.AdminCatalogEndpointsRegistration();
 
 app.MapDefaultControllerRoute();
 
-/* Seed test data for statistics in Development */
-if (app.Environment.IsDevelopment())
-{
-    // await app.SeedStatisticsTestDataAsync();
-    // await app.SeedIvanVisitHistoryAsync(); //TODO: Implement the same for your purpose
-    // await app.SeedDefredusVisitHistoryAsync();
-}
 app.MapControllers();
-app.Run();
+await app.RunAsync();
 
+static void EnsureSqliteDataDirectory(string resolvedSqliteConnectionString)
+{
+    var builderSql = new SqliteConnectionStringBuilder(resolvedSqliteConnectionString);
+    string dataPath = builderSql.DataSource;
+    string? directory = Path.GetDirectoryName(dataPath);
+    if (!string.IsNullOrEmpty(directory))
+        Directory.CreateDirectory(directory);
+}
+
+static async Task EnsureSeedAdminAsync(DataContext db)
+{
+    const string email = "admin@example.com";
+    string normalized = email.ToLowerInvariant();
+    const string password = "admin123";
+    Guid specialistId = Guid.Parse("dfe327cd-3efc-42f5-8dfc-f3bce55a49b7");
+
+    Customer? row =
+        await db.Customers.FirstOrDefaultAsync(c =>
+            c.Email != null && c.Email.ToLower() == normalized);
+
+    string hash = BCrypt.Net.BCrypt.HashPassword(password);
+
+    if (row is null)
+    {
+        await db.Customers.AddAsync(
+            new Customer
+            {
+                Id = Guid.NewGuid(),
+                Name = "Администратор",
+                Email = normalized,
+                PasswordHash = hash,
+                IsAdmin = true,
+                IsSpecialist = true,
+                SpecialistId = specialistId,
+                FirstVisit = DateTime.UtcNow,
+                LastVisit = DateTime.UtcNow,
+            });
+    }
+    else
+    {
+        row.PasswordHash = hash;
+        row.IsAdmin = true;
+        row.IsSpecialist = true;
+        row.SpecialistId ??= specialistId;
+        if (string.IsNullOrWhiteSpace(row.Name))
+            row.Name = "Администратор";
+    }
+
+    await db.SaveChangesAsync();
+}

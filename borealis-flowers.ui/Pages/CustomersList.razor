@@ -1,0 +1,59 @@
+@page "/cabinet/customers"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Клиенты</h1>
+
+    @if (!Session.IsFlorist && !Session.IsAdmin)
+    {
+        <div class="notice-banner">Раздел для флористов.</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        <table style="width:100%;border-collapse:collapse;font-size:.92rem;">
+            <thead>
+            <tr style="text-align:left;border-bottom:1px solid var(--stroke);">
+                <th style="padding:.5rem;">Имя</th>
+                <th style="padding:.5rem;">Email</th>
+                <th style="padding:.5rem;">Телефон</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (CustomerBriefDto c in _rows)
+            {
+                <tr style="border-bottom:1px solid rgba(0,0,0,.04);">
+                    <td style="padding:.5rem;">@c.Name</td>
+                    <td style="padding:.5rem;">@(c.Email ?? "—")</td>
+                    <td style="padding:.5rem;">@(c.Phone ?? "—")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+
+    List<CustomerBriefDto>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsFlorist && !Session.IsAdmin)
+            return;
+
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<CustomerBriefDto>>("staff/customers");
+        }
+        catch
+        {
+            _rows = [];
+        }
+    }
+
+}

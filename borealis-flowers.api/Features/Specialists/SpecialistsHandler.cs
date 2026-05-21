@@ -17,6 +17,7 @@ public static class SpecialistsHandler
                 FullName = s.FullName,
                 ImgUrl = s.ImgUrl,
                 Address = s.Address ?? string.Empty,
+                City = s.City ?? string.Empty,
                 Specialization = s.Specialization.Name,
             }).ToListAsync();
     }

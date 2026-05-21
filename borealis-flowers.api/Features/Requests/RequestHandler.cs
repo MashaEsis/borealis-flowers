@@ -28,7 +28,7 @@ public static class RequestsHandler
             {
                 CustomerId = dto.CustomerId,
                 SpecialistId = specialist.Id,
-                State = State.Pending,
+                OrderStatus = OrderStatus.New,
                 CreatedAt = DateTime.UtcNow,
                 Description = dto.Description
             };
@@ -53,7 +53,7 @@ public static class RequestsHandler
                     CustomerId = r.CustomerId,
                     CustomerName = r.Customer != null ? r.Customer.Name : null,
                     SpecialistId = r.SpecialistId,
-                    State = r.State,
+                    OrderStatus = r.OrderStatus,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt,
                     Description = r.Description,
@@ -75,23 +75,23 @@ public static class RequestsHandler
     {
         return async (string state, DataContext db) =>
         {
-            if (!Enum.TryParse<State>(state, true, out var stateEnum))
+            if (!Enum.TryParse<OrderStatus>(state, true, out var stateEnum))
             {
-                return Results.BadRequest($"Invalid state value: {state}. Valid values are: {string.Join(", ", Enum.GetNames<State>())}");
+                return Results.BadRequest($"Invalid state value: {state}. Valid values are: {string.Join(", ", Enum.GetNames<OrderStatus>())}");
             }
 
             var requests = await db.Requests
                 .Include(r => r.Customer)
                 .Include(r => r.Specialist)
                     .ThenInclude(s => s!.Specialization)
-                .Where(r => r.State == stateEnum)
+                .Where(r => r.OrderStatus == stateEnum)
                 .Select(r => new RequestDetailDto
                 {
                     Id = r.Id,
                     CustomerId = r.CustomerId,
                     CustomerName = r.Customer != null ? r.Customer.Name : null,
                     SpecialistId = r.SpecialistId,
-                    State = r.State,
+                    OrderStatus = r.OrderStatus,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt,
                     Description = r.Description,
@@ -122,7 +122,7 @@ public static class RequestsHandler
             var transaction = await db.Database.BeginTransactionAsync();
             try
             {
-                request.State = dto.State;
+                request.OrderStatus = dto.OrderStatus;
                 request.UpdatedAt = DateTime.UtcNow;
                 request.Resolution = dto.Resolution;
 
@@ -130,7 +130,7 @@ public static class RequestsHandler
 
                 // IN case of Approved change IsMaster flag in Customer table
                 // Specialist IsActive = true should be set in Specialists table
-                if (dto.State == State.Approved)
+                if (dto.OrderStatus == OrderStatus.Approved)
                 {
                     // Set Customer's IsMaster flag cause request was approved
                     var relatedCustomer = await db.Customers.FindAsync(request.CustomerId);
@@ -163,7 +163,7 @@ public static class RequestsHandler
                 Id = request.Id,
                 CustomerId = request.CustomerId,
                 SpecialistId = request.SpecialistId,
-                State = request.State,
+                OrderStatus = request.OrderStatus,
                 CreatedAt = request.CreatedAt,
                 UpdatedAt = request.UpdatedAt,
                 Description = request.Description,

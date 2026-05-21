@@ -1,0 +1,109 @@
+@page "/apply/florist"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Стать флористом</h1>
+
+    @if (!Session.IsClient)
+    {
+        <div class="notice-banner">
+            Форма доступна авторизованным клиентам.
+            <NavLink class="link-accent" href="/login">Войти</NavLink>
+        </div>
+    }
+    else if (Session.CurrentUser?.IsSpecialist == true || Session.IsAdmin)
+    {
+        <p class="muted-small">Для вашей учётной записи уже активны права флориста или администратора.</p>
+    }
+    else if (_done)
+    {
+        <div class="notice-banner">Заявка отправлена и находится на рассмотрении.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="notice-banner">@_error</div>
+        }
+
+        <div class="field">
+            <label>ФИО</label>
+            <input @bind="_full" maxlength="200"/>
+        </div>
+        <div class="field">
+            <label>Опыт</label>
+            <textarea @bind="_exp" rows="4"></textarea>
+        </div>
+        <div class="field">
+            <label>Портфолио (ссылка или описание)</label>
+            <textarea @bind="_portfolio" rows="3"></textarea>
+        </div>
+        <div class="field">
+            <label>Мотивация</label>
+            <textarea @bind="_motivation" rows="4"></textarea>
+        </div>
+
+        <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SendAsync">
+            @(_busy ? "Отправка…" : "Отправить заявку")
+        </button>
+    }
+</section>
+
+@code {
+
+    string _full = "";
+
+    string _exp = "";
+
+    string _portfolio = "";
+
+    string _motivation = "";
+
+    string? _error;
+
+    bool _busy;
+
+    bool _done;
+
+    async Task SendAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "florist-applications/",
+                new FloristApplicationCreateDto
+                {
+                    FullName = _full.Trim(),
+                    Experience = _exp.Trim(),
+                    PortfolioNotes = _portfolio.Trim(),
+                    Motivation = _motivation.Trim(),
+                });
+
+            if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                _error = await res.Content.ReadAsStringAsync();
+                return;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось отправить заявку.";
+                return;
+            }
+
+            _done = true;
+        }
+        catch
+        {
+            _error = "Нет связи с API.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+}
