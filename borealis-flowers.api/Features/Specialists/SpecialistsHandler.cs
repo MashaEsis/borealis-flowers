@@ -1,4 +1,7 @@
+using System.Security.Claims;
 using borealis_flowers.api.Data;
+using borealis_flowers.api.Data.Models;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +13,7 @@ public static class SpecialistsHandler
     {
         return async (DataContext db) => await db.Specialists
             .AsNoTracking()
+            .Where(s => s.IsActive)
             .Include(x => x.Specialization)
             .Select(s => new SpecialistDto
             {
@@ -22,21 +26,41 @@ public static class SpecialistsHandler
             }).ToListAsync();
     }
 
-    public static Func<SpecialistUpdateVM, DataContext, Task<IResult>> UpdateSpecialist()
+    public static Func<SpecialistUpdateVM, DataContext, ClaimsPrincipal, Task<IResult>> UpdateSpecialist()
     {
-        return async ([FromBody] SpecialistUpdateVM specialist, DataContext db) =>
+        return async ([FromBody] SpecialistUpdateVM specialist, DataContext db, ClaimsPrincipal user) =>
         {
-            var existingSpecialist = await db.Specialists.FindAsync(specialist.Id);
+            string? role = user.FindFirstValue(ClaimTypes.Role);
+            if (role is not ("Admin" or "Florist"))
+                return Results.Forbid();
 
+            Specialist? existingSpecialist = await db.Specialists.FindAsync(specialist.Id);
             if (existingSpecialist == null)
                 return Results.NotFound($"Specialist with ID {specialist.Id} not found");
 
-            existingSpecialist.FullName = specialist.FullName;
+            if (role == "Florist")
+            {
+                string? sub = user.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (sub is null || !Guid.TryParse(sub, out Guid customerId))
+                    return Results.Unauthorized();
+
+                bool ownsProfile = await db.Customers.AnyAsync(c =>
+                    c.Id == customerId && c.SpecialistId == specialist.Id && c.IsSpecialist);
+                if (!ownsProfile)
+                    return Results.Forbid();
+            }
+
+            string trimmedName = specialist.FullName.Trim();
+            existingSpecialist.FullName = trimmedName;
             existingSpecialist.ImgUrl = specialist.ImgUrl;
             existingSpecialist.SpecializationId = specialist.SpecializationId;
             existingSpecialist.Address = specialist.Address;
             existingSpecialist.Latitude = specialist.Latitude;
             existingSpecialist.Longitude = specialist.Longitude;
+
+            await db.Customers
+                .Where(c => c.SpecialistId == specialist.Id && c.IsSpecialist && !c.IsAdmin)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.Name, trimmedName));
 
             await db.SaveChangesAsync();
 

@@ -98,7 +98,9 @@ using (IServiceScope scope = app.Services.CreateScope())
     DataContext db = scope.ServiceProvider.GetRequiredService<DataContext>();
     LegacySqliteMigrationBaseline.StampInitialMigrationIfLegacyDatabase(db);
     db.Database.Migrate();
+    ServiceCatalogSchemaPatcher.Apply(db);
     await EnsureSeedAdminAsync(db);
+    await BouquetCatalogSeeder.ApplyAsync(db, app.Environment.ContentRootPath);
 }
 
 app.UseMiddleware<CoreAdminProtectionMiddleware>();
@@ -164,7 +166,6 @@ static async Task EnsureSeedAdminAsync(DataContext db)
     const string email = "admin@example.com";
     string normalized = email.ToLowerInvariant();
     const string password = "admin123";
-    Guid specialistId = Guid.Parse("dfe327cd-3efc-42f5-8dfc-f3bce55a49b7");
 
     Customer? row =
         await db.Customers.FirstOrDefaultAsync(c =>
@@ -182,8 +183,8 @@ static async Task EnsureSeedAdminAsync(DataContext db)
                 Email = normalized,
                 PasswordHash = hash,
                 IsAdmin = true,
-                IsSpecialist = true,
-                SpecialistId = specialistId,
+                IsSpecialist = false,
+                SpecialistId = null,
                 FirstVisit = DateTime.UtcNow,
                 LastVisit = DateTime.UtcNow,
             });
@@ -192,8 +193,8 @@ static async Task EnsureSeedAdminAsync(DataContext db)
     {
         row.PasswordHash = hash;
         row.IsAdmin = true;
-        row.IsSpecialist = true;
-        row.SpecialistId ??= specialistId;
+        row.IsSpecialist = false;
+        row.SpecialistId = null;
         if (string.IsNullOrWhiteSpace(row.Name))
             row.Name = "Администратор";
     }

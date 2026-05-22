@@ -31,6 +31,10 @@ public sealed class UserMeDto
 
     public string? Email { get; set; }
 
+    public string? Phone { get; set; }
+
+    public DateTime? Birthday { get; set; }
+
     public string Role { get; set; } = "";
 
     public bool IsAdmin { get; set; }
@@ -39,6 +43,17 @@ public sealed class UserMeDto
 
     [JsonPropertyName("specialistId")]
     public Guid? SpecialistId { get; set; }
+}
+
+public sealed class UpdateProfileRequestDto
+{
+    public string Name { get; set; } = "";
+
+    public string? Email { get; set; }
+
+    public string? Phone { get; set; }
+
+    public DateTime? Birthday { get; set; }
 }
 
 public sealed class OrderRowDto
@@ -180,6 +195,20 @@ public sealed class CustomerBriefDto
     public string Name { get; set; } = "";
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public bool IsAdmin { get; set; }
+    public bool IsSpecialist { get; set; }
+}
+
+public sealed class FloristStaffDto
+{
+    public Guid CustomerId { get; set; }
+    public Guid? SpecialistId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? SpecialistName { get; set; }
+    public string? City { get; set; }
+    public bool IsActive { get; set; }
 }
 
 public sealed class SpecializationRowDto
@@ -197,6 +226,19 @@ public sealed class ServiceRowDto
     public string SpecializationName { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+    public string? FlowerComposition { get; set; }
+    public string? ImageUrl { get; set; }
+    public double Price { get; set; }
+    public int? EstimatedTime { get; set; }
+}
+
+public sealed class ServiceEditDto
+{
+    public Guid SpecializationId { get; set; }
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public string? FlowerComposition { get; set; }
+    public string? ImageUrl { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
 }

@@ -38,12 +38,16 @@
                     <option value="3">Юбилей</option>
                     <option value="4">Другое</option>
                 </select>
+                @if (_eventTypeInt == 4)
+                {
+                    <p class="field-hint">Любое другое направление — опишите формат и пожелания в поле ниже.</p>
+                }
             </div>
 
             <div class="field">
                 <label>Дата и время (местные)</label>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-                    <input type="date" @bind="_date" class="form-input"/>
+                    <input type="date" @bind="_date" min="@_minDate" class="form-input"/>
                     <input type="time" @bind="_time" class="form-input"/>
                 </div>
             </div>
@@ -98,6 +102,8 @@ else
 
     int _eventTypeInt;
 
+    readonly string _minDate = DateTime.Today.ToString("yyyy-MM-dd");
+
     DateTime _date = DateTime.Today;
 
     DateTime _time = DateTime.Today.AddHours(12);
@@ -138,6 +144,11 @@ else
         }
 
         var startLocal = _date.Date + _time.TimeOfDay;
+        if (startLocal < DateTime.Now)
+        {
+            _error = "Нельзя заказать мероприятие на прошедшую дату или время.";
+            return;
+        }
         DateTime utc = DateTime.SpecifyKind(startLocal, DateTimeKind.Local).ToUniversalTime();
 
         _busy = true;

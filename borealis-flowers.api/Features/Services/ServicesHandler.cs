@@ -17,6 +17,8 @@ public static class ServicesHandler
                 EstimatedTime = s.EstimatedTime,
                 Name = s.Name,
                 Description = s.Description,
+                FlowerComposition = s.FlowerComposition,
+                ImageUrl = s.ImageUrl,
                 Price = s.Price,
             }).ToListAsync();
     }
@@ -34,6 +36,8 @@ public static class ServicesHandler
                 EstimatedTime = s.EstimatedTime,
                 Name = s.Name,
                 Description = s.Description,
+                FlowerComposition = s.FlowerComposition,
+                ImageUrl = s.ImageUrl,
                 Price = s.Price,
             })
             .FirstOrDefaultAsync();

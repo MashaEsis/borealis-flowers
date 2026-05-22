@@ -3,8 +3,8 @@
 @inject NavigationManager Nav
 
 <section class="card-panel">
-    <h1 style="margin-top:0;">Услуги / Каталог букетов</h1>
-    <p class="muted-small">Все позиции из базы. Фото — демо (Picsum) по id услуги.</p>
+    <h1 style="margin-top:0;">Каталог букетов</h1>
+    <p class="muted-small">Все позиции из каталога студии.</p>
 </section>
 
 @if (_error is not null)
@@ -24,7 +24,7 @@ else
     <div class="catalog-grid">
         @foreach (ServiceRowDto s in _items)
         {
-            string img = $"https://picsum.photos/seed/bouquet-{s.Id:N}/480/300";
+            string img = ServiceImage(s);
             string preview = ShortDesc(s);
             <article class="product-card">
                 <img src="@img" alt="" width="480" height="300" loading="lazy"/>
@@ -71,5 +71,10 @@ else
             return d;
         return d[..50].TrimEnd() + "…";
     }
+
+    static string ServiceImage(ServiceRowDto s) =>
+        string.IsNullOrWhiteSpace(s.ImageUrl)
+            ? $"https://picsum.photos/seed/bouquet-{s.Id:N}/480/300"
+            : s.ImageUrl;
 
 }

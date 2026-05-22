@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.Security.Claims;
 using borealis_flowers.api.Data;
 using borealis_flowers.api.Data.Models;
+using borealis_flowers.api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace borealis_flowers.api.Features.Orders;
@@ -125,6 +126,9 @@ public static class OrdersHandler
         if (!await db.Specialists.AnyAsync(s => s.Id == dto.SpecialistId && s.IsActive))
             return Results.BadRequest("Флорист не найден или не активен.");
 
+        if (dto.EventStartsAtUtc < DateTime.UtcNow)
+            return Results.BadRequest("Нельзя заказать мероприятие на прошедшую дату.");
+
         string typeRu = dto.EventType switch
         {
             EventTypeKind.Wedding => "Свадьба",
@@ -198,6 +202,8 @@ public static class OrdersHandler
         DataContext db,
         bool historyOnly = false)
     {
+        await OrderCourierAutoComplete.ApplyAsync(db);
+
         Guid? cid = TryCustomerId(user);
         if (cid is null)
             return Results.Unauthorized();
@@ -205,9 +211,13 @@ public static class OrdersHandler
         IQueryable<Request> q = db.Requests.AsNoTracking()
             .Where(r => r.CustomerId == cid);
         if (historyOnly)
-            q = q.Where(r => r.OrderStatus == OrderStatus.Completed);
+            q = q.Where(r =>
+                r.OrderStatus == OrderStatus.Completed ||
+                r.OrderStatus == OrderStatus.Rejected);
         else
-            q = q.Where(r => r.OrderStatus != OrderStatus.Completed);
+            q = q.Where(r =>
+                r.OrderStatus != OrderStatus.Completed &&
+                r.OrderStatus != OrderStatus.Rejected);
 
         var list = await q
             .OrderByDescending(r => r.CompletedAtUtc ?? r.UpdatedAt ?? r.CreatedAt)
@@ -219,13 +229,18 @@ public static class OrdersHandler
 
     public static async Task<IResult> FloristOrdersAsync(ClaimsPrincipal user, DataContext db)
     {
+        await OrderCourierAutoComplete.ApplyAsync(db);
+
         Guid? specialistId = TrySpecialistId(user);
         if (specialistId is null)
             return Results.Forbid();
 
         var list = await db.Requests.AsNoTracking()
             .Include(r => r.Customer)
-            .Where(r => r.SpecialistId == specialistId && r.OrderStatus != OrderStatus.Completed)
+            .Where(r =>
+                r.SpecialistId == specialistId &&
+                r.OrderStatus != OrderStatus.Completed &&
+                r.OrderStatus != OrderStatus.Rejected)
             .OrderByDescending(r => r.CreatedAt)
             .Select(MapOrder())
             .ToListAsync();
@@ -235,13 +250,17 @@ public static class OrdersHandler
 
     public static async Task<IResult> FloristHistoryAsync(ClaimsPrincipal user, DataContext db)
     {
+        await OrderCourierAutoComplete.ApplyAsync(db);
+
         Guid? specialistId = TrySpecialistId(user);
         if (specialistId is null)
             return Results.Forbid();
 
         var list = await db.Requests.AsNoTracking()
             .Include(r => r.Customer)
-            .Where(r => r.SpecialistId == specialistId && r.OrderStatus == OrderStatus.Completed)
+            .Where(r =>
+                r.SpecialistId == specialistId &&
+                (r.OrderStatus == OrderStatus.Completed || r.OrderStatus == OrderStatus.Rejected))
             .OrderByDescending(r => r.CompletedAtUtc)
             .Select(MapOrder())
             .ToListAsync();
@@ -269,6 +288,8 @@ public static class OrdersHandler
         ClaimsPrincipal user,
         DataContext db)
     {
+        await OrderCourierAutoComplete.ApplyAsync(db);
+
         Request? r = await db.Requests.FirstOrDefaultAsync(x => x.Id == id);
         if (r is null)
             return Results.NotFound();
@@ -290,8 +311,8 @@ public static class OrdersHandler
             }
             else if (cid is not null && r.CustomerId == cid)
             {
-                if (!(r.OrderStatus == OrderStatus.Ready && next == OrderStatus.Completed))
-                    return Results.BadRequest("Клиент может только подтвердить получение (из «Готов» в «Завершён»).");
+                if (!CanClientTransition(r, next))
+                    return Results.BadRequest("Недопустимый переход для клиента.");
             }
             else
                 return Results.Forbid();
@@ -299,6 +320,10 @@ public static class OrdersHandler
 
         ApplyDto(r, dto, next);
         r.UpdatedAt = DateTime.UtcNow;
+        if (next == OrderStatus.HandedToCourier && r.DepartureAtUtc is null)
+            r.DepartureAtUtc = DateTime.UtcNow;
+        if (next == OrderStatus.Rejected && cid is not null && r.CustomerId == cid && string.IsNullOrWhiteSpace(dto.Resolution))
+            r.Resolution = "Отменено клиентом";
         if (next == OrderStatus.Completed)
         {
             r.CompletedAtUtc = DateTime.UtcNow;
@@ -318,8 +343,10 @@ public static class OrdersHandler
             {
                 (OrderStatus.New, OrderStatus.InProgress) => true,
                 (OrderStatus.New, OrderStatus.Rejected) => true,
-                (OrderStatus.InProgress, OrderStatus.Ready) => true,
+                (OrderStatus.InProgress, OrderStatus.Approved) => true,
                 (OrderStatus.InProgress, OrderStatus.Rejected) => true,
+                (OrderStatus.Approved, OrderStatus.Ready) => true,
+                (OrderStatus.Ready, OrderStatus.HandedToCourier) => true,
                 _ => false,
             };
         }
@@ -335,6 +362,27 @@ public static class OrdersHandler
             (OrderStatus.Approved, OrderStatus.InProgress) => true,
             (OrderStatus.InProgress, OrderStatus.Ready) => true,
             (OrderStatus.InProgress, OrderStatus.Rejected) => true,
+            _ => false,
+        };
+    }
+
+    static bool CanClientTransition(Request r, OrderStatus next)
+    {
+        if (r.OrderKind == OrderKind.Bouquet)
+        {
+            return (r.OrderStatus, next) switch
+            {
+                (OrderStatus.New, OrderStatus.Rejected) => true,
+                (OrderStatus.InProgress, OrderStatus.Rejected) => true,
+                (OrderStatus.HandedToCourier, OrderStatus.Completed) => true,
+                _ => false,
+            };
+        }
+
+        return (r.OrderStatus, next) switch
+        {
+            (OrderStatus.Ready, OrderStatus.Completed) => true,
+            (OrderStatus.HandedToCourier, OrderStatus.Completed) => true,
             _ => false,
         };
     }

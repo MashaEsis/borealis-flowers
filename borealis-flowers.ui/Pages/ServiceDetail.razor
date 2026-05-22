@@ -14,7 +14,9 @@
     }
     else
     {
-        string img = $"https://picsum.photos/seed/bouquet-{_svc.Id:N}/960/600";
+        string img = string.IsNullOrWhiteSpace(_svc.ImageUrl)
+            ? $"https://picsum.photos/seed/bouquet-{_svc.Id:N}/960/600"
+            : _svc.ImageUrl;
         <div class="service-detail-layout">
             <div>
                 <img src="@img" alt="" width="960" height="600" loading="lazy" style="max-width:100%;height:auto;border-radius:10px;"/>
@@ -32,9 +34,18 @@
                 <p class="muted-small" style="line-height:1.5;">
                     @(string.IsNullOrWhiteSpace(_svc.Description) ? "Описание уточняется при заказе." : _svc.Description)
                 </p>
-                <p class="muted-small" style="margin-top:1rem;">
-                    Состав и оттенки можно согласовать с флористом после оформления.
-                </p>
+                @if (!string.IsNullOrWhiteSpace(_svc.FlowerComposition))
+                {
+                    <p class="muted-small" style="margin-top:.75rem;line-height:1.5;">
+                        <strong>Состав:</strong> @_svc.FlowerComposition
+                    </p>
+                }
+                else
+                {
+                    <p class="muted-small" style="margin-top:1rem;">
+                        Состав и оттенки можно согласовать с флористом после оформления.
+                    </p>
+                }
 
                 @if (_ordered is Guid oid)
                 {

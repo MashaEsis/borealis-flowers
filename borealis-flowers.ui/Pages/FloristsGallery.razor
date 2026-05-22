@@ -3,17 +3,17 @@
 @inject FloristCatalogService FloristCatalogService
 
 <section class="card-panel">
-    <h1 style="margin-top:0;">Мастера Borealis</h1>
+    <h1 style="margin-top:0;">Наши флористы</h1>
 
     <p class="muted-small">
-        Свяжите визит с портфолио каждого — вы увидите демонстрационные локальные снимки, пока живой галереей не управляет ваш API медиафайлов.
+        Портфолио мастеров студии: стиль работы и подборка фотографий композиций.
     </p>
 </section>
 
 <div class="fl-grid" style="margin-top:1.5rem;">
     @foreach (FloristVm florist in FloristCatalogService.Cached)
     {
-        <article class="card-panel">
+        <article class="card-panel florist-card">
             <img loading="lazy" class="fl-photo" src="@florist.ImgUrl" alt="@($"Портрет {florist.FullName}")"/>
 
             <h2 style="margin:.75rem 0 .25rem;font-size:1.2rem;">
@@ -21,18 +21,27 @@
             </h2>
 
             <p class="muted-small" style="margin:0;line-height:1.4;">
-                @(string.IsNullOrWhiteSpace(florist.City) ? "Студийный флорист" : florist.City) · @(string.IsNullOrWhiteSpace(florist.Specialization) ? "Студийные композиции" :
-                florist.Specialization)
+                @(string.IsNullOrWhiteSpace(florist.City) ? "Казань" : florist.City)
+                · @(string.IsNullOrWhiteSpace(florist.Specialization) ? "Студийные композиции" : florist.Specialization)
             </p>
 
+            <p class="muted-small" style="margin:.5rem 0 0;line-height:1.5;">@florist.StyleDescription</p>
+
+            <div class="portfolio-preview portfolio-preview-compact">
+                @foreach (string url in FloristCatalogService.BuildPortfolioPreview(florist.Id, 3))
+                {
+                    <img src="@url" alt="Работа" loading="lazy"/>
+                }
+            </div>
+
             <div style="margin-top:1rem;">
-                <NavLink class="btn btn-soft" href="@($"/florists/{florist.Id}/portfolio")" style="text-decoration:none;display:inline-flex;align-items:center;">Просмотреть портфолио</NavLink>
+                <NavLink class="btn btn-soft" href="@($"/florists/{florist.Id}/portfolio")" style="text-decoration:none;display:inline-flex;align-items:center;">Портфолио</NavLink>
             </div>
         </article>
     }
 
     @if (FloristCatalogService.Cached.Count == 0)
     {
-        <p class="card-panel muted-small">Не удалось подгрузить список. Проверьте `BackendApiUrl` или включите офлайновый режим после перезапуска.</p>
+        <p class="card-panel muted-small">Не удалось подгрузить список. Проверьте API или перезапустите приложение.</p>
     }
 </div>

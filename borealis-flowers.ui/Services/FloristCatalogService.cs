@@ -35,14 +35,16 @@ public sealed class FloristCatalogService
                              Id = id1, FullName = "Александра Серова", ImgUrl =
                                  "https://images.unsplash.com/photo-1455659817273-f96807779a38?w=400&auto=format&fit=crop&q=70",
                              City = "Казань",
-                             Specialization = "Студийные композиции"
+                             Specialization = "Студийные композиции",
+                             StyleDescription = "Нежный минимализм, сезонные текстуры и спокойная палитра."
                          },
                          new FloristVm
                          {
                              Id = id2, FullName = "Марк Тюльпанов", ImgUrl =
                                  "https://images.unsplash.com/photo-1466692476869-aefc1fc43f73?w=400&auto=format&fit=crop&q=70",
                              City = "Казань",
-                             Specialization = "Мероприятия под ключ"
+                             Specialization = "Мероприятия под ключ",
+                             StyleDescription = "Крупные инсталляции, свадебный декор и корпоративное оформление."
                          }
                      })
                 _cache.Add(f);
@@ -80,7 +82,8 @@ public sealed class FloristCatalogService
                         ? PortfolioUrl(row.Id, "primary")
                         : row.ImgUrl.Trim(),
                     City = row.City ?? "",
-                    Specialization = row.Specialization ?? ""
+                    Specialization = row.Specialization ?? "",
+                    StyleDescription = DescribeStyle(row.Specialization),
                 });
             }
         }
@@ -90,15 +93,14 @@ public sealed class FloristCatalogService
         }
     }
 
-    public static IEnumerable<string> BuildPortfolioGallery(Guid floristId)
-    {
-        foreach (var seed in new[]
-                 {
-                     "peony-b", "orchid-z", "wedding-alt", "table-set", "arch-fl",
-                     "hand-tie-q"
-                 })
-            yield return PortfolioUrl(floristId, seed);
-    }
+    public static IEnumerable<string> BuildPortfolioGallery(Guid floristId) =>
+        BuildPortfolioPreview(floristId, 6);
+
+    public static IEnumerable<string> BuildPortfolioPreview(Guid floristId, int count = 4) =>
+        PortfolioSeeds.Take(count).Select(seed => PortfolioUrl(floristId, seed));
+
+    static readonly string[] PortfolioSeeds =
+        ["peony-b", "orchid-z", "wedding-alt", "table-set", "arch-fl", "hand-tie-q"];
 
     static string PortfolioUrl(Guid floristId, string variation)
     {
@@ -106,6 +108,16 @@ public sealed class FloristCatalogService
         string prefix = nf.Length >= 8 ? nf[..8] : nf;
         return $"https://picsum.photos/seed/{prefix}-{variation}/480/560";
     }
+
+    static string DescribeStyle(string? specialization) =>
+        specialization switch
+        {
+            "Hair" or "Nail" or "Skincare" or "Makeup" =>
+                "Авторские букеты в сдержанной эстетике: воздух, линия и сезонные оттенки.",
+            null or "" =>
+                "Индивидуальный подход к композиции и подбору цветов под ваше событие.",
+            _ => $"Стиль: {specialization}. Аккуратные композиции без визуального шума.",
+        };
 
     private sealed record SpecialistApiDto
     {

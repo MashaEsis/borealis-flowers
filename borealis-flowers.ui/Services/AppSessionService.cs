@@ -58,6 +58,13 @@ public sealed class AppSessionService(JwtState jwt)
         Notify();
     }
 
+    public async Task ApplyProfileAsync(UserMeDto user, BrowserStorageService browser)
+    {
+        _user = user;
+        await browser.SetRawAsync(KUser, JsonSerializer.Serialize(user, JsonOpts));
+        Notify();
+    }
+
     public async Task RestoreAsync(BrowserStorageService browser)
     {
         string? token = await browser.GetRawAsync(KJwt);

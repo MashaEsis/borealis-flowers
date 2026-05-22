@@ -1,9 +1,12 @@
 @page "/cabinet/admin/services"
+@using Microsoft.AspNetCore.Components.Forms
 @inject BackendApiClient Api
 @inject AppSessionService Session
 
 <section class="card-panel">
     <h1 style="margin-top:0;">Управление каталогом</h1>
+    <p class="muted-small">Добавление, редактирование и удаление карточек букетов.</p>
+
     @if (!Session.IsAdmin)
     {
         <div class="notice-banner">Нужны права администратора.</div>
@@ -14,38 +17,46 @@
     }
     else
     {
-        <h2 style="font-size:1.05rem;">Услуги</h2>
-        <table style="width:100%;border-collapse:collapse;font-size:.88rem;">
-            <thead>
-            <tr style="text-align:left;border-bottom:1px solid var(--stroke);">
-                <th style="padding:.45rem;">Название</th>
-                <th style="padding:.45rem;">Специализация</th>
-                <th style="padding:.45rem;">Цена</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (ServiceRowDto s in _services)
-            {
-                <tr>
-                    <td style="padding:.45rem;">@s.Name</td>
-                    <td style="padding:.45rem;">@s.SpecializationName</td>
-                    <td style="padding:.45rem;">@s.Price.ToString("N0") ₽</td>
-                </tr>
-            }
-            </tbody>
-        </table>
+        @if (_notice is not null)
+        {
+            <div class="notice-banner" style="margin-bottom:1rem;">@_notice</div>
+        }
 
-        <h2 style="font-size:1.05rem;margin-top:1.5rem;">Специализации</h2>
-        <ul>
-            @foreach (SpecializationRowDto sp in _specs)
+        <div style="margin-bottom:1rem;">
+            @if (_addingNew)
             {
-                <li>@sp.Name @(sp.IsActive ? "" : "(выкл.)")</li>
+                <button type="button" class="btn btn-ghost" @onclick="CancelAdd">Отмена</button>
             }
-        </ul>
+            else
+            {
+                <button type="button" class="btn btn-primary" @onclick="StartAdd">+ Добавить букет</button>
+            }
+        </div>
 
-        <p class="muted-small" style="margin-top:1rem;">
-            Правки цен и слотов — через эндпоинты <code>admin/catalog/*</code> или Swagger на API.
-        </p>
+        @if (_addingNew && _newEdit is not null)
+        {
+            <article class="card-panel catalog-edit-card" style="border:1px dashed var(--accent, #8b7355);">
+                <h2 style="margin:0 0 1rem;font-size:1.05rem;">Новая позиция</h2>
+                @RenderEditForm(_newEdit, null, CreateAsync, _creating)
+            </article>
+        }
+
+        @foreach (ServiceRowDto s in _services)
+        {
+            ServiceEditState edit = GetEdit(s);
+            string preview = string.IsNullOrWhiteSpace(edit.ImageUrl)
+                ? $"https://picsum.photos/seed/bouquet-{s.Id:N}/480/300"
+                : edit.ImageUrl;
+
+            <article class="card-panel catalog-edit-card">
+                <div class="catalog-edit-layout">
+                    <img src="@preview" alt="" class="catalog-edit-photo" loading="lazy"/>
+                    <div style="flex:1;">
+                        @RenderEditForm(edit, s.Id, () => SaveAsync(s.Id), _savingId == s.Id, s.Name)
+                    </div>
+                </div>
+            </article>
+        }
     }
 </section>
 
@@ -55,11 +66,33 @@
 
     List<SpecializationRowDto>? _specs;
 
+    readonly Dictionary<Guid, ServiceEditState> _edits = new();
+
+    ServiceEditState? _newEdit;
+
+    bool _addingNew;
+
+    bool _creating;
+
+    Guid? _savingId;
+
+    Guid? _confirmDeleteId;
+
+    Guid? _deletingId;
+
+    string? _notice;
+
     protected override async Task OnInitializedAsync()
     {
         if (!Session.IsAdmin)
             return;
 
+        await ReloadAsync();
+    }
+
+    async Task ReloadAsync()
+    {
+        _edits.Clear();
         try
         {
             _services = await Api.Http.GetFromJsonAsync<List<ServiceRowDto>>("admin/catalog/services");
@@ -69,7 +102,302 @@
         {
             _services = [];
             _specs = [];
+            _notice = "Не удалось загрузить каталог.";
         }
+    }
+
+    void StartAdd()
+    {
+        _addingNew = true;
+        _notice = null;
+        _newEdit = new ServiceEditState
+        {
+            SpecializationIdString = _specs?.FirstOrDefault()?.Id.ToString("D") ?? "",
+            Price = 2500,
+            EstimatedTime = 45,
+        };
+    }
+
+    void CancelAdd()
+    {
+        _addingNew = false;
+        _newEdit = null;
+    }
+
+    ServiceEditState GetEdit(ServiceRowDto s)
+    {
+        if (!_edits.TryGetValue(s.Id, out ServiceEditState? edit))
+        {
+            edit = new ServiceEditState
+            {
+                Name = s.Name,
+                Description = s.Description ?? "",
+                FlowerComposition = s.FlowerComposition ?? "",
+                ImageUrl = s.ImageUrl ?? "",
+                Price = s.Price,
+                EstimatedTime = s.EstimatedTime ?? 0,
+                SpecializationIdString = s.SpecializationId.ToString("D"),
+            };
+            _edits[s.Id] = edit;
+        }
+
+        return edit;
+    }
+
+    RenderFragment RenderEditForm(
+        ServiceEditState edit,
+        Guid? serviceId,
+        Func<Task> onSave,
+        bool saving,
+        string? displayName = null) =>
+        @<div>
+            <div class="field">
+                <label>Название</label>
+                <input type="text" @bind="edit.Name"/>
+            </div>
+            <div class="field">
+                <label>Специализация</label>
+                <select @bind="edit.SpecializationIdString">
+                    @foreach (SpecializationRowDto sp in _specs!)
+                    {
+                        <option value="@sp.Id.ToString("D")">@sp.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Цена (₽)</label>
+                <input type="number" step="50" min="0" @bind="edit.Price"/>
+            </div>
+            <div class="field">
+                <label>Время сборки (мин)</label>
+                <input type="number" step="5" min="0" @bind="edit.EstimatedTime"/>
+            </div>
+            <div class="field">
+                <label>Фото букета</label>
+                <input type="url" @bind="edit.ImageUrl" placeholder="/images/bouquets/…"/>
+                <InputFile OnChange="@(e => UploadImageAsync(edit, e))" accept="image/*,.jfif" class="form-input" style="margin-top:.45rem;"/>
+                <p class="muted-small" style="margin:.35rem 0 0;">Выберите файл с компьютера или укажите URL.</p>
+            </div>
+            <div class="field">
+                <label>Описание</label>
+                <textarea rows="2" @bind="edit.Description" placeholder="Краткое описание букета"></textarea>
+            </div>
+            <div class="field">
+                <label>Состав цветов</label>
+                <textarea rows="2" @bind="edit.FlowerComposition" placeholder="Розы, эвкалипт, …"></textarea>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;">
+                <button type="button" class="btn btn-primary" disabled="@saving" @onclick="onSave">
+                    @(saving ? "Сохранение…" : serviceId is null ? "Добавить в каталог" : "Сохранить")
+                </button>
+                @if (serviceId is Guid id)
+                {
+                    @if (_confirmDeleteId == id)
+                    {
+                        <span class="muted-small">Удалить «@displayName»?</span>
+                        <button type="button" class="btn btn-primary" style="font-size:.82rem;padding:.35rem .75rem;"
+                                disabled="@(_deletingId == id)" @onclick="@(() => DeleteAsync(id))">Да</button>
+                        <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                @onclick="@(() => _confirmDeleteId = null)">Нет</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                @onclick="@(() => _confirmDeleteId = id)">Удалить</button>
+                    }
+                }
+            </div>
+        </div>;
+
+    bool TryBuildDto(ServiceEditState edit, out ServiceEditDto dto, out string? error)
+    {
+        dto = new ServiceEditDto();
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(edit.Name))
+        {
+            error = "Укажите название букета.";
+            return false;
+        }
+
+        if (!Guid.TryParse(edit.SpecializationIdString, out Guid specId))
+        {
+            error = "Выберите специализацию.";
+            return false;
+        }
+
+        dto = new ServiceEditDto
+        {
+            Name = edit.Name.Trim(),
+            Description = edit.Description.Trim(),
+            FlowerComposition = edit.FlowerComposition.Trim(),
+            ImageUrl = edit.ImageUrl.Trim(),
+            Price = edit.Price,
+            EstimatedTime = edit.EstimatedTime > 0 ? edit.EstimatedTime : null,
+            SpecializationId = specId,
+        };
+        return true;
+    }
+
+    async Task CreateAsync()
+    {
+        if (_newEdit is null)
+            return;
+
+        if (!TryBuildDto(_newEdit, out ServiceEditDto dto, out string? error))
+        {
+            _notice = error;
+            return;
+        }
+
+        _creating = true;
+        _notice = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync("admin/catalog/services", dto);
+            if (!res.IsSuccessStatusCode)
+            {
+                _notice = "Не удалось добавить букет.";
+                return;
+            }
+
+            _notice = $"«{dto.Name}» добавлен в каталог.";
+            _addingNew = false;
+            _newEdit = null;
+            await ReloadAsync();
+        }
+        catch
+        {
+            _notice = "Ошибка сети.";
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    async Task SaveAsync(Guid id)
+    {
+        if (!_edits.TryGetValue(id, out ServiceEditState? edit))
+            return;
+
+        if (!TryBuildDto(edit, out ServiceEditDto dto, out string? error))
+        {
+            _notice = error;
+            return;
+        }
+
+        _savingId = id;
+        _notice = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync($"admin/catalog/services/{id:D}", dto);
+            if (!res.IsSuccessStatusCode)
+            {
+                _notice = "Не удалось сохранить карточку.";
+                return;
+            }
+
+            _notice = $"«{edit.Name}» сохранён.";
+            ServiceRowDto? row = _services?.FirstOrDefault(x => x.Id == id);
+            if (row is not null)
+            {
+                row.Name = dto.Name;
+                row.Description = dto.Description;
+                row.FlowerComposition = dto.FlowerComposition;
+                row.ImageUrl = dto.ImageUrl;
+                row.Price = dto.Price;
+                row.EstimatedTime = dto.EstimatedTime;
+                row.SpecializationId = dto.SpecializationId;
+                row.SpecializationName = _specs?.FirstOrDefault(sp => sp.Id == dto.SpecializationId)?.Name
+                    ?? row.SpecializationName;
+            }
+        }
+        catch
+        {
+            _notice = "Ошибка сети.";
+        }
+        finally
+        {
+            _savingId = null;
+        }
+    }
+
+    async Task DeleteAsync(Guid id)
+    {
+        _deletingId = id;
+        _notice = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.DeleteAsync($"admin/catalog/services/{id:D}");
+            if (!res.IsSuccessStatusCode)
+            {
+                _notice = "Не удалось удалить позицию. Возможно, она используется в заказах.";
+                return;
+            }
+
+            _notice = "Позиция удалена из каталога.";
+            _confirmDeleteId = null;
+            _edits.Remove(id);
+            await ReloadAsync();
+        }
+        catch
+        {
+            _notice = "Ошибка сети.";
+        }
+        finally
+        {
+            _deletingId = null;
+        }
+    }
+
+    async Task UploadImageAsync(ServiceEditState edit, InputFileChangeEventArgs e)
+    {
+        IBrowserFile? file = e.File;
+        if (file is null)
+            return;
+
+        _notice = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using Stream stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            content.Add(new StreamContent(stream), "file", file.Name);
+
+            HttpResponseMessage res = await Api.Http.PostAsync("admin/catalog/bouquet-images", content);
+            if (!res.IsSuccessStatusCode)
+            {
+                _notice = "Не удалось загрузить фото.";
+                return;
+            }
+
+            UploadImageResponse? payload = await res.Content.ReadFromJsonAsync<UploadImageResponse>();
+            if (payload?.Url is not null)
+            {
+                edit.ImageUrl = payload.Url;
+                _notice = "Фото загружено. Нажмите «Сохранить», чтобы применить к карточке.";
+            }
+        }
+        catch
+        {
+            _notice = "Ошибка загрузки файла.";
+        }
+    }
+
+    sealed class UploadImageResponse
+    {
+        public string? Url { get; set; }
+    }
+
+    sealed class ServiceEditState
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string FlowerComposition { get; set; } = "";
+        public string ImageUrl { get; set; } = "";
+        public double Price { get; set; }
+        public int EstimatedTime { get; set; }
+        public string SpecializationIdString { get; set; } = "";
     }
 
 }

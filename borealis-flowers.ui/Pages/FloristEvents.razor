@@ -31,7 +31,7 @@
                 <article class="card-panel" style="margin-bottom:.75rem;">
                     <p class="muted-small" style="margin:0;">@o.CreatedAt.ToLocalTime():g</p>
                     <p style="margin:.35rem 0;">@(o.Description ?? "")</p>
-                    <p class="status-pill">@OrderStateUi.Russian(o.State)</p>
+                    <p class="status-pill">@OrderStateUi.Russian(o.State, o.OrderKind)</p>
                 </article>
             }
         }

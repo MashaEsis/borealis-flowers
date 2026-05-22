@@ -27,12 +27,12 @@
     }
     else
     {
-        @foreach (OrderRowDto o in _rows)
-        {
-            <article class="card-panel" style="margin-bottom:.85rem;">
-                <p class="status-pill">
-                    @(o.OrderKind == 1 ? "Мероприятие" : "Букет") · @OrderStateUi.Russian(o.OrderStatus)
-                </p>
+                @foreach (OrderRowDto o in _rows)
+                {
+                    <article class="card-panel" style="margin-bottom:.85rem;">
+                        <p class="status-pill">
+                            @(o.OrderKind == 1 ? "Мероприятие" : "Букет") · @OrderStateUi.Russian(o.OrderStatus, o.OrderKind)
+                        </p>
                 <p class="muted-small" style="margin:.4rem 0 .2rem;">@o.CreatedAt.ToLocalTime():g</p>
                 <p style="margin:0 .2rem .75rem;">@(o.Description ?? "")</p>
 
@@ -166,10 +166,8 @@
     {
         if (o.OrderKind == 0)
         {
-            yield return (0, "Новый");
-            yield return (1, "В обработке");
-            yield return (5, "Готов к выдаче");
-            yield return (7, "Отклонён");
+            foreach (int status in BouquetFloristStatuses(o.OrderStatus))
+                yield return (status, OrderStateUi.Russian(status, 0));
         }
         else
         {
@@ -182,5 +180,16 @@
             yield return (7, "Отклонён");
         }
     }
+
+    static IEnumerable<int> BouquetFloristStatuses(int current) =>
+        current switch
+        {
+            0 => [0, 1, 7],
+            1 => [1, 4, 7],
+            4 => [4, 5],
+            5 => [5, 8],
+            8 => [8],
+            _ => [current],
+        };
 
 }

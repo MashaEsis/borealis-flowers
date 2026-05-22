@@ -1,127 +1,281 @@
-@page "/cabinet/client"
-@inject BackendApiClient Api
-@inject AppSessionService Session
-
-<section class="card-panel">
-    <h1 style="margin-top:0;">Личный кабинет</h1>
-    @if (!Session.IsClient)
-    {
-        <div class="notice-banner">
-            <NavLink class="link-accent" href="/login">Войдите</NavLink> как клиент.
-        </div>
-    }
-    else if (_err is not null)
-    {
-        <div class="notice-banner">@_err</div>
-    }
-    else
-    {
-        <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;">
-            <button type="button" class="@(_tab==0 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=0)">Активные заказы</button>
-            <button type="button" class="@(_tab==1 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=1)">История</button>
-        </div>
-
-        @if (_tab == 0)
-        {
-            @if (_active is null)
-            {
-                <p class="muted-small">Загрузка…</p>
-            }
-            else if (_active.Count == 0)
-            {
-                <p class="muted-small">Нет активных заказов.</p>
-            }
-            else
-            {
-                @foreach (OrderRowDto o in _active)
-                {
-                    <article class="card-panel" style="margin-bottom:.75rem;">
-                        <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus)</p>
-                        <p class="muted-small" style="margin:.4rem 0 .2rem;">@o.CreatedAt.ToLocalTime():g</p>
-                        <p style="margin:0;">@(o.Description ?? "")</p>
-                        @if (o.OrderStatus == 5)
-                        {
-                            <button type="button" class="btn btn-primary" style="margin-top:.65rem;" @onclick="@(() => ConfirmReceived(o))">
-                                Подтвердить получение
-                            </button>
-                        }
-                    </article>
-                }
-            }
-        }
-        else
-        {
-            @if (_history is null)
-            {
-                <p class="muted-small">Загрузка…</p>
-            }
-            else if (_history.Count == 0)
-            {
-                <p class="muted-small">История пуста.</p>
-            }
-            else
-            {
-                @foreach (OrderRowDto o in _history)
-                {
-                    <article class="card-panel" style="margin-bottom:.75rem;">
-                        <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus)</p>
-                        <p class="muted-small" style="margin:.35rem 0;">@(o.CompletedAtUtc?.ToLocalTime() ?? o.CreatedAt.ToLocalTime()):g</p>
-                        <p style="margin:0;">@(o.ServiceTitleSnapshot ?? o.Description ?? "")</p>
-                        @if (o.QuoteTotal is double q)
-                        {
-                            <p class="muted-small" style="margin:.25rem 0 0;">@q.ToString("N0") ₽</p>
-                        }
-                    </article>
-                }
-            }
-        }
-    }
-</section>
-
-@if (Session.IsClient)
-{
-    <section class="card-panel">
-        <p class="muted-small" style="margin:0 0 .5rem;">Новый заказ букета — в каталоге услуг.</p>
-        <NavLink class="btn btn-soft" href="/services" style="text-decoration:none;display:inline-flex;">Каталог</NavLink>
-    </section>
-}
-
-@code {
-
-    int _tab;
-
-    List<OrderRowDto>? _active;
-
-    List<OrderRowDto>? _history;
-
-    string? _err;
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (!Session.IsClient)
-            return;
-        await Reload();
-    }
-
-    async Task Reload()
-    {
-        try
-        {
-            _active = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine");
-            _history = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine/history");
-        }
-        catch
-        {
-            _err = "Не удалось загрузить заказы.";
-        }
-    }
-
-    async Task ConfirmReceived(OrderRowDto o)
-    {
-        await Api.Http.PutAsJsonAsync(
-            $"orders/{o.Id:D}/state",
-            new UpdateOrderStateDto { OrderStatus = 6 });
-        await Reload();
-    }
-
-}
+@page "/cabinet/client"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject FloristCatalogService FloristCatalog
+@implements IDisposable
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Личный кабинет</h1>
+    @if (!Session.IsClient)
+    {
+        <div class="notice-banner">
+            <NavLink class="link-accent" href="/login">Войдите</NavLink> как клиент.
+        </div>
+    }
+    else if (_err is not null && _active is null)
+    {
+        <div class="notice-banner">@_err</div>
+    }
+    else
+    {
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+            <button type="button" class="@(_tab==0 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=0)">Флористы</button>
+            <button type="button" class="@(_tab==1 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=1)">Активные заказы</button>
+            <button type="button" class="@(_tab==2 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=2)">История</button>
+        </div>
+
+        @if (_tab == 0)
+        {
+            <p class="muted-small">Наши флористы — кратко о стиле и примеры работ.</p>
+            @if (FloristCatalog.Cached.Count == 0)
+            {
+                <p class="muted-small">Загрузка списка флористов…</p>
+            }
+            else
+            {
+                @foreach (FloristVm florist in FloristCatalog.Cached)
+                {
+                    <article class="card-panel florist-card" style="margin-bottom:1rem;">
+                        <div class="florist-card-head">
+                            <img class="fl-photo fl-photo-sm" src="@florist.ImgUrl" alt="@florist.FullName" loading="lazy"/>
+                            <div>
+                                <h2 style="margin:0 0 .35rem;font-size:1.1rem;">@florist.FullName</h2>
+                                <p class="muted-small" style="margin:0;">
+                                    @(string.IsNullOrWhiteSpace(florist.City) ? "Казань" : florist.City)
+                                    · @(string.IsNullOrWhiteSpace(florist.Specialization) ? "Студийные композиции" : florist.Specialization)
+                                </p>
+                                <p class="muted-small" style="margin:.45rem 0 0;line-height:1.5;">@florist.StyleDescription</p>
+                            </div>
+                        </div>
+                        <div class="portfolio-preview">
+                            @foreach (string url in FloristCatalogService.BuildPortfolioPreview(florist.Id, 4))
+                            {
+                                <img src="@url" alt="Работа @florist.FullName" loading="lazy"/>
+                            }
+                        </div>
+                        <NavLink class="btn btn-soft" href="@($"/florists/{florist.Id}/portfolio")" style="text-decoration:none;display:inline-flex;margin-top:.75rem;">
+                            Полное портфолио
+                        </NavLink>
+                    </article>
+                }
+            }
+        }
+        else if (_tab == 1)
+        {
+            @if (_active is null)
+            {
+                <p class="muted-small">Загрузка…</p>
+            }
+            else if (_active.Count == 0)
+            {
+                <p class="muted-small">Нет активных заказов.</p>
+            }
+            else
+            {
+                @foreach (OrderRowDto o in _active)
+                {
+                    <article class="card-panel" style="margin-bottom:.75rem;">
+                        <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus, o.OrderKind)</p>
+                        <p class="muted-small" style="margin:.4rem 0 .2rem;">@o.CreatedAt.ToLocalTime():g</p>
+                        <p style="margin:0;">@(o.Description ?? "")</p>
+                        @if (o.OrderStatus == 8 && o.DepartureAtUtc is DateTime handedAt)
+                        {
+                            <p class="muted-small" style="margin:.45rem 0 0;">
+                                Курьер передал заказ @handedAt.ToLocalTime():t.
+                                Если не подтвердите получение, заказ завершится автоматически через 20 минут.
+                            </p>
+                        }
+                        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.65rem;">
+                            @if (OrderStateUi.ClientCanCancel(o.OrderKind, o.OrderStatus))
+                            {
+                                @if (_confirmCancelId == o.Id)
+                                {
+                                    <span class="muted-small">Отменить заказ?</span>
+                                    <button type="button" class="btn btn-primary" style="font-size:.82rem;padding:.35rem .75rem;"
+                                            disabled="@(_busyId == o.Id)" @onclick="@(() => CancelOrderAsync(o))">Да</button>
+                                    <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                            @onclick="@(() => _confirmCancelId = null)">Нет</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-ghost" @onclick="@(() => _confirmCancelId = o.Id)">
+                                        Отменить заказ
+                                    </button>
+                                }
+                            }
+                            @if (OrderStateUi.ClientCanConfirmReceived(o.OrderStatus))
+                            {
+                                <button type="button" class="btn btn-primary" disabled="@(_busyId == o.Id)"
+                                        @onclick="@(() => ConfirmReceivedAsync(o))">
+                                    Подтвердить получение
+                                </button>
+                            }
+                        </div>
+                    </article>
+                }
+            }
+        }
+        else
+        {
+            @if (_history is null)
+            {
+                <p class="muted-small">Загрузка…</p>
+            }
+            else if (_history.Count == 0)
+            {
+                <p class="muted-small">История пуста.</p>
+            }
+            else
+            {
+                @foreach (OrderRowDto o in _history)
+                {
+                    <article class="card-panel" style="margin-bottom:.75rem;">
+                        <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus, o.OrderKind)</p>
+                        <p class="muted-small" style="margin:.35rem 0;">@(o.CompletedAtUtc?.ToLocalTime() ?? o.CreatedAt.ToLocalTime()):g</p>
+                        <p style="margin:0;">@(o.ServiceTitleSnapshot ?? o.Description ?? "")</p>
+                        @if (o.QuoteTotal is double q)
+                        {
+                            <p class="muted-small" style="margin:.25rem 0 0;">@q.ToString("N0") ₽</p>
+                        }
+                    </article>
+                }
+            }
+        }
+    }
+</section>
+
+@if (Session.IsClient)
+{
+    <section class="card-panel">
+        <p class="muted-small" style="margin:0 0 .5rem;">Новый заказ — в каталоге букетов или в разделе мероприятий.</p>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <NavLink class="btn btn-soft" href="/services" style="text-decoration:none;display:inline-flex;">Каталог букетов</NavLink>
+            <NavLink class="btn btn-ghost" href="/events" style="text-decoration:none;display:inline-flex;">Мероприятия</NavLink>
+        </div>
+    </section>
+}
+
+@code {
+
+    int _tab = 1;
+
+    List<OrderRowDto>? _active;
+
+    List<OrderRowDto>? _history;
+
+    string? _err;
+
+    Guid? _confirmCancelId;
+
+    Guid? _busyId;
+
+    PeriodicTimer? _pollTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsClient)
+            return;
+
+        await Reload();
+        _pollTimer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        _ = PollOrdersAsync();
+    }
+
+    async Task PollOrdersAsync()
+    {
+        if (_pollTimer is null)
+            return;
+
+        try
+        {
+            while (await _pollTimer.WaitForNextTickAsync())
+            {
+                if (_tab is 1 or 2)
+                    await Reload();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    async Task Reload()
+    {
+        try
+        {
+            _active = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine");
+            _history = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine/history");
+            _err = null;
+        }
+        catch
+        {
+            _err = "Не удалось загрузить заказы.";
+        }
+    }
+
+    async Task CancelOrderAsync(OrderRowDto o)
+    {
+        _busyId = o.Id;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                $"orders/{o.Id:D}/state",
+                new UpdateOrderStateDto
+                {
+                    OrderStatus = 7,
+                    Resolution = "Отменено клиентом",
+                });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _err = "Не удалось отменить заказ.";
+                return;
+            }
+
+            _confirmCancelId = null;
+            await Reload();
+        }
+        catch
+        {
+            _err = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    async Task ConfirmReceivedAsync(OrderRowDto o)
+    {
+        _busyId = o.Id;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                $"orders/{o.Id:D}/state",
+                new UpdateOrderStateDto { OrderStatus = 6 });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _err = "Не удалось подтвердить получение.";
+                return;
+            }
+
+            await Reload();
+        }
+        catch
+        {
+            _err = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _pollTimer?.Dispose();
+    }
+
+}

@@ -24,7 +24,7 @@
             <article class="card-panel" style="margin-bottom:.85rem;">
                 <p class="muted-small" style="margin:0;">@o.CreatedAt.ToLocalTime():g · @(o.CustomerName ?? "—")</p>
                 <p style="margin:.5rem 0;">@(o.Description ?? "")</p>
-                <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus)</p>
+                <p class="status-pill">@OrderStateUi.Russian(o.OrderStatus, o.OrderKind)</p>
 
                 @if (o.OrderStatus == 3 && o.OrderKind == 1)
                 {
@@ -47,7 +47,7 @@
                         <select @onchange="@(e => SetPending(o.Id, e.Value))">
                             @for (int i = 0; i <= 7; i++)
                             {
-                                <option value="@i" selected="@(o.OrderStatus == i)">@OrderStateUi.Russian(i)</option>
+                                <option value="@i" selected="@(o.OrderStatus == i)">@OrderStateUi.Russian(i, o.OrderKind)</option>
                             }
                         </select>
                     </div>

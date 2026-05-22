@@ -25,8 +25,18 @@ public sealed class UserMeDto
     public Guid Id { get; set; }
     public string Name { get; set; } = "";
     public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public DateTime? Birthday { get; set; }
     public string Role { get; set; } = "";
     public bool IsAdmin { get; set; }
     public bool IsSpecialist { get; set; }
     public Guid? SpecialistId { get; set; }
+}
+
+public sealed class UpdateProfileRequest
+{
+    public string Name { get; set; } = "";
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public DateTime? Birthday { get; set; }
 }

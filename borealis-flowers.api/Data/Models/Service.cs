@@ -13,6 +13,10 @@ public class Service
 
     public string Name { get; set; }
     public string? Description { get; set; }
+    /// <summary>Состав цветов (для карточки каталога).</summary>
+    public string? FlowerComposition { get; set; }
+    /// <summary>URL фото букета.</summary>
+    public string? ImageUrl { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
 

@@ -4,6 +4,7 @@
 
 <section class="card-panel">
     <h1 style="margin-top:0;">Клиенты</h1>
+    <p class="muted-small">Список клиентов студии (без флористов и администраторов).</p>
 
     @if (!Session.IsFlorist && !Session.IsAdmin)
     {
@@ -13,23 +14,27 @@
     {
         <p class="muted-small">Загрузка…</p>
     }
+    else if (_rows.Count == 0)
+    {
+        <p class="muted-small">Клиентов пока нет.</p>
+    }
     else
     {
-        <table style="width:100%;border-collapse:collapse;font-size:.92rem;">
+        <table class="data-table">
             <thead>
-            <tr style="text-align:left;border-bottom:1px solid var(--stroke);">
-                <th style="padding:.5rem;">Имя</th>
-                <th style="padding:.5rem;">Email</th>
-                <th style="padding:.5rem;">Телефон</th>
+            <tr>
+                <th>Имя</th>
+                <th>Email</th>
+                <th>Телефон</th>
             </tr>
             </thead>
             <tbody>
             @foreach (CustomerBriefDto c in _rows)
             {
-                <tr style="border-bottom:1px solid rgba(0,0,0,.04);">
-                    <td style="padding:.5rem;">@c.Name</td>
-                    <td style="padding:.5rem;">@(c.Email ?? "—")</td>
-                    <td style="padding:.5rem;">@(c.Phone ?? "—")</td>
+                <tr>
+                    <td>@c.Name</td>
+                    <td>@(c.Email ?? "—")</td>
+                    <td>@(c.Phone ?? "—")</td>
                 </tr>
             }
             </tbody>

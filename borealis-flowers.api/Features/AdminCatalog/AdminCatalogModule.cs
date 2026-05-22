@@ -24,5 +24,8 @@ public static class AdminCatalogModule
         g.MapGet("/timeslots", AdminCatalogHandler.ListTimeslots).RequireAuthorization();
         g.MapPut("/timeslots/{id:guid}", AdminCatalogHandler.UpdateTimeslot).RequireAuthorization()
             .DisableAntiforgery();
+
+        g.MapPost("/bouquet-images", AdminCatalogHandler.UploadBouquetImage).RequireAuthorization()
+            .DisableAntiforgery();
     }
 }

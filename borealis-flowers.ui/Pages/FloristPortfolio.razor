@@ -21,6 +21,10 @@ else if (_found is true && _member is not null)
                     @(string.IsNullOrWhiteSpace(_member.City) ? "Город уточняется у флориста" : _member.City)
                     · @(string.IsNullOrWhiteSpace(_member.Specialization) ? "Направление уточняется" : _member.Specialization)
                 </p>
+                @if (!string.IsNullOrWhiteSpace(_member.StyleDescription))
+                {
+                    <p class="muted-small" style="margin:.45rem 0 0;line-height:1.5;">@_member.StyleDescription</p>
+                }
                 <div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:.6rem;">
                     <NavLink class="btn btn-primary" href="/services" style="text-decoration:none;display:inline-flex;align-items:center;">Каталог букетов</NavLink>
                     <NavLink class="btn btn-soft" href="/florists" style="text-decoration:none;display:inline-flex;align-items:center;">В каталог</NavLink>
@@ -35,7 +39,7 @@ else if (_found is true && _member is not null)
         <p class="muted-small">Подборочные образы только для интерфейса — подключите собственную медиатеку в API позже.</p>
 
         <div class="fl-grid" style="margin-top:1.25rem;">
-            @foreach (string url in FloristCatalogService.BuildPortfolioGallery(FloristGuid))
+            @foreach (string url in FloristCatalogService.BuildPortfolioPreview(FloristGuid, 5))
             {
                 <figure style="margin:0;">
                     <img class="fl-photo" src="@url" loading="lazy" alt="Работа" />

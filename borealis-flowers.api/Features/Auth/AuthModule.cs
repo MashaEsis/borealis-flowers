@@ -8,5 +8,6 @@ public static class AuthModule
         g.MapPost("/register", AuthHandler.RegisterAsync).DisableAntiforgery();
         g.MapPost("/login", AuthHandler.LoginAsync).DisableAntiforgery();
         g.MapGet("/me", AuthHandler.MeAsync).RequireAuthorization();
+        g.MapPut("/profile", AuthHandler.UpdateProfileAsync).RequireAuthorization().DisableAntiforgery();
     }
 }

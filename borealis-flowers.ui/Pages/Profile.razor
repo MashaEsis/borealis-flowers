@@ -1,0 +1,176 @@
+@page "/profile"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject BrowserStorageService Browser
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Профиль</h1>
+
+    @if (Session.IsVisitor)
+    {
+        <div class="notice-banner">
+            <NavLink class="link-accent" href="/login">Войдите</NavLink>, чтобы редактировать профиль.
+        </div>
+    }
+    else if (_error is not null && _profile is null)
+    {
+        <div class="notice-banner">@_error</div>
+    }
+    else if (_profile is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        @if (_saved)
+        {
+            <div class="notice-banner" style="margin-bottom:1rem;">Изменения сохранены.</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="notice-banner" style="margin-bottom:1rem;">@_error</div>
+        }
+
+        <div class="field">
+            <label>Имя</label>
+            <input type="text" @bind="_name" placeholder="Как к вам обращаться"/>
+        </div>
+
+        <div class="field">
+            <label>Email</label>
+            <input type="email" @bind="_email" placeholder="email@example.com"/>
+        </div>
+
+        <div class="field">
+            <label>Телефон</label>
+            <input type="tel" @bind="_phone" placeholder="+7 …"/>
+        </div>
+
+        <div class="field">
+            <label>Дата рождения</label>
+            <input type="date" @bind="_birthday" class="form-input"/>
+        </div>
+
+        <p class="muted-small">Роль: @DescribeRole(Session.Role)</p>
+
+        <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
+            @(_busy ? "Сохранение…" : "Сохранить")
+        </button>
+    }
+</section>
+
+@code {
+
+    UserMeDto? _profile;
+
+    string _name = "";
+
+    string _email = "";
+
+    string _phone = "";
+
+    DateTime? _birthday;
+
+    string? _error;
+
+    bool _busy;
+
+    bool _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsVisitor)
+            return;
+
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        _error = null;
+        _saved = false;
+        try
+        {
+            _profile = await Api.Http.GetFromJsonAsync<UserMeDto>("auth/me");
+            if (_profile is null)
+            {
+                _error = "Не удалось загрузить профиль.";
+                return;
+            }
+
+            _name = _profile.Name;
+            _email = _profile.Email ?? "";
+            _phone = _profile.Phone ?? "";
+            _birthday = _profile.Birthday;
+        }
+        catch
+        {
+            _error = "Не удалось загрузить профиль. Проверьте API.";
+        }
+    }
+
+    async Task SaveAsync()
+    {
+        _error = null;
+        _saved = false;
+
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _error = "Укажите имя.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                "auth/profile",
+                new UpdateProfileRequestDto
+                {
+                    Name = _name.Trim(),
+                    Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim(),
+                    Phone = string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim(),
+                    Birthday = _birthday,
+                });
+
+            if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                _error = "Пользователь с таким email уже есть.";
+                return;
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось сохранить профиль.";
+                return;
+            }
+
+            UserMeDto? updated = await res.Content.ReadFromJsonAsync<UserMeDto>();
+            if (updated is not null)
+            {
+                _profile = updated;
+                await Session.ApplyProfileAsync(updated, Browser);
+            }
+
+            _saved = true;
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    static string DescribeRole(StudioRole role) =>
+        role switch
+        {
+            StudioRole.Client => "клиент",
+            StudioRole.Florist => "флорист",
+            StudioRole.Admin => "администратор",
+            _ => "гость",
+        };
+
+}

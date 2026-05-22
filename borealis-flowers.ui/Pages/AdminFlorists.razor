@@ -1,0 +1,133 @@
+@page "/cabinet/admin/florists"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Флористы</h1>
+    <p class="muted-small">
+        Управление флористами студии. При увольнении аккаунт переводится в клиенты — история заказов и мероприятий сохраняется.
+    </p>
+
+    @if (!Session.IsAdmin)
+    {
+        <div class="notice-banner">Только администратор.</div>
+    }
+    else if (_message is not null)
+    {
+        <div class="notice-banner" style="margin-bottom:1rem;">@_message</div>
+    }
+
+    @if (Session.IsAdmin)
+    {
+        @if (_rows is null)
+        {
+            <p class="muted-small">Загрузка…</p>
+        }
+        else if (_rows.Count == 0)
+        {
+            <p class="muted-small">Активных флористов нет.</p>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                <tr>
+                    <th>Имя</th>
+                    <th>Email</th>
+                    <th>Профиль флориста</th>
+                    <th>Город</th>
+                    <th>Статус</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (FloristStaffDto f in _rows)
+                {
+                    <tr>
+                        <td>@f.Name</td>
+                        <td>@(f.Email ?? "—")</td>
+                        <td>@(f.SpecialistName ?? "—")</td>
+                        <td>@(f.City ?? "—")</td>
+                        <td>@(f.IsActive ? "Активен" : "Неактивен")</td>
+                        <td>
+                            @if (_confirmId == f.CustomerId)
+                            {
+                                <span class="muted-small" style="margin-right:.35rem;">Подтвердить?</span>
+                                <button type="button" class="btn btn-primary" style="font-size:.82rem;padding:.35rem .75rem;"
+                                        disabled="@(_busyId == f.CustomerId)"
+                                        @onclick="@(() => DemoteConfirmedAsync(f))">Да</button>
+                                <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                        @onclick="@(() => _confirmId = null)">Нет</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                        @onclick="@(() => _confirmId = f.CustomerId)">Уволить</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+</section>
+
+@code {
+
+    List<FloristStaffDto>? _rows;
+
+    string? _message;
+
+    Guid? _busyId;
+
+    Guid? _confirmId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+            return;
+        await ReloadAsync();
+    }
+
+    async Task ReloadAsync()
+    {
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<FloristStaffDto>>("staff/florists");
+        }
+        catch
+        {
+            _rows = [];
+            _message = "Не удалось загрузить список флористов.";
+        }
+    }
+
+    async Task DemoteConfirmedAsync(FloristStaffDto f)
+    {
+        _busyId = f.CustomerId;
+        _message = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsync($"staff/florists/{f.CustomerId:D}/demote", null);
+            if (!res.IsSuccessStatusCode)
+            {
+                _message = "Не удалось выполнить увольнение.";
+                return;
+            }
+
+            _message = $"{f.Name} переведён(а) в клиенты. История заказов сохранена.";
+            _confirmId = null;
+            await ReloadAsync();
+        }
+        catch
+        {
+            _message = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+}

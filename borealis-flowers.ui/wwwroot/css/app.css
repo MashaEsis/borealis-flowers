@@ -254,6 +254,66 @@ a {
     color: var(--muted);
 }
 
+.field-hint {
+    margin: .4rem 0 0;
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.fl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.fl-photo {
+    width: 100%;
+    border-radius: 12px;
+    object-fit: cover;
+    aspect-ratio: 4/5;
+    display: block;
+    border: 1px solid var(--stroke);
+}
+
+.fl-photo-sm {
+    width: 88px;
+    height: 88px;
+    aspect-ratio: 1;
+    flex-shrink: 0;
+}
+
+.florist-card-head {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.portfolio-preview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .5rem;
+    margin-top: .85rem;
+}
+
+.portfolio-preview-compact {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.portfolio-preview img {
+    width: 100%;
+    aspect-ratio: 4/5;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid var(--stroke);
+}
+
+@media (max-width: 640px) {
+    .portfolio-preview {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 input,
 select,
 textarea,
@@ -355,6 +415,44 @@ textarea {
 
 .product-card-body {
     padding: .85rem 1rem 1rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .92rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: .5rem;
+    text-align: left;
+    border-bottom: 1px solid var(--stroke);
+}
+
+.catalog-edit-card {
+    margin-bottom: 1rem;
+}
+
+.catalog-edit-layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 1rem;
+    margin-bottom: .5rem;
+}
+
+.catalog-edit-photo {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid var(--stroke);
+}
+
+@media (max-width: 720px) {
+    .catalog-edit-layout {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 840px) {

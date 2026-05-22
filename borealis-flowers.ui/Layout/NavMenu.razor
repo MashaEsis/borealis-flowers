@@ -4,32 +4,41 @@
 
 <nav class="sidebar-nav">
     <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All">Главная</NavLink>
-    <NavLink class="sidebar-link" href="/services">Услуги · каталог</NavLink>
-    @if (App.Role is not StudioRole.Florist)
+    <NavLink class="sidebar-link" href="/services" Match="NavLinkMatch.Prefix">Каталог букетов</NavLink>
+
+    @if (App.Role is StudioRole.Client or StudioRole.Visitor)
     {
-        <NavLink class="sidebar-link" href="/events">Мероприятия</NavLink>
+        <NavLink class="sidebar-link" href="/events" Match="NavLinkMatch.All">Мероприятия</NavLink>
     }
 
     @if (App.Role is StudioRole.Client)
     {
-        <NavLink class="sidebar-link" href="/cabinet/client">Мои заказы</NavLink>
-        <NavLink class="sidebar-link" href="/services">Заказать букет</NavLink>
-        <NavLink class="sidebar-link" href="/events">Мероприятие</NavLink>
-        <NavLink class="sidebar-link" href="/apply/florist">Стать флористом</NavLink>
+        <NavLink class="sidebar-link" href="/florists" Match="NavLinkMatch.Prefix">Флористы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/client" Match="NavLinkMatch.All">Мои заказы</NavLink>
+        <NavLink class="sidebar-link" href="/apply/florist" Match="NavLinkMatch.All">Стать флористом</NavLink>
     }
 
-    @if (App.Role is StudioRole.Florist or StudioRole.Admin)
+    @if (App.Role is StudioRole.Florist && !App.IsAdmin)
     {
-        <NavLink class="sidebar-link" href="/cabinet/florist">Мои заказы</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/florist/events">Мои мероприятия</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/customers">Клиенты</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">Мои заказы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">Мои мероприятия</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/customers" Match="NavLinkMatch.All">Клиенты</NavLink>
     }
 
     @if (App.Role is StudioRole.Admin)
     {
-        <NavLink class="sidebar-link" href="/cabinet/admin/applications">Заявки флористов</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin/services">Управление услугами</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin">Все заказы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">Мои заказы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">Мои мероприятия</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/users" Match="NavLinkMatch.All">Пользователи</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/florists" Match="NavLinkMatch.All">Флористы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/applications" Match="NavLinkMatch.All">Заявки флористов</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/services" Match="NavLinkMatch.All">Управление каталогом</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin" Match="NavLinkMatch.All">Все заказы</NavLink>
+    }
+
+    @if (!App.IsVisitor)
+    {
+        <NavLink class="sidebar-link" href="/profile" Match="NavLinkMatch.All">Профиль</NavLink>
     }
 
     @if (App.IsVisitor)

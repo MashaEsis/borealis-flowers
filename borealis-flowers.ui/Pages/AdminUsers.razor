@@ -1,0 +1,88 @@
+@page "/cabinet/admin/users"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Пользователи</h1>
+    <p class="muted-small">Администраторы и клиенты студии (без флористов).</p>
+
+    @if (!Session.IsAdmin)
+    {
+        <div class="notice-banner">Только администратор.</div>
+    }
+    else if (_rows is null)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else
+    {
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+            <button type="button" class="@(_tab==0 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=0)">
+                Администраторы (@_admins.Count)
+            </button>
+            <button type="button" class="@(_tab==1 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _tab=1)">
+                Клиенты (@_clients.Count)
+            </button>
+        </div>
+
+        @if (_tab == 0 && _admins.Count == 0)
+        {
+            <p class="muted-small">Администраторов пока нет.</p>
+        }
+        else if (_tab == 1 && _clients.Count == 0)
+        {
+            <p class="muted-small">Клиентов пока нет.</p>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                <tr>
+                    <th>Имя</th>
+                    <th>Email</th>
+                    <th>Телефон</th>
+                    <th>Роль</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (CustomerBriefDto c in _tab == 0 ? _admins : _clients)
+                {
+                    <tr>
+                        <td>@c.Name</td>
+                        <td>@(c.Email ?? "—")</td>
+                        <td>@(c.Phone ?? "—")</td>
+                        <td>@(c.IsAdmin ? "Администратор" : "Клиент")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+</section>
+
+@code {
+
+    int _tab;
+
+    List<CustomerBriefDto>? _rows;
+
+    List<CustomerBriefDto> _admins => _rows?.Where(r => r.IsAdmin).ToList() ?? [];
+
+    List<CustomerBriefDto> _clients => _rows?.Where(r => !r.IsAdmin).ToList() ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAdmin)
+            return;
+
+        try
+        {
+            _rows = await Api.Http.GetFromJsonAsync<List<CustomerBriefDto>>("staff/users");
+        }
+        catch
+        {
+            _rows = [];
+        }
+    }
+
+}

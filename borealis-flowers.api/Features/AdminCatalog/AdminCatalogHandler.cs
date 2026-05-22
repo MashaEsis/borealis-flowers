@@ -2,7 +2,9 @@ using System.Security.Claims;
 using borealis_flowers.api.Data;
 using borealis_flowers.api.Data.Models;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using IO = System.IO;
 
 namespace borealis_flowers.api.Features.AdminCatalog;
 
@@ -15,6 +17,9 @@ public static class AdminCatalogHandler
     {
         public Guid SpecializationId { get; set; }
         public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public string? FlowerComposition { get; set; }
+        public string? ImageUrl { get; set; }
         public double Price { get; set; }
         public int? EstimatedTime { get; set; }
     }
@@ -61,6 +66,9 @@ public static class AdminCatalogHandler
             {
                 s.Id,
                 s.Name,
+                s.Description,
+                s.FlowerComposition,
+                s.ImageUrl,
                 s.Price,
                 s.EstimatedTime,
                 s.SpecializationId,
@@ -79,10 +87,16 @@ public static class AdminCatalogHandler
         if (!await db.Specialization.AnyAsync(sp => sp.Id == dto.SpecializationId))
             return Results.BadRequest("Специализация не найдена.");
 
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return Results.BadRequest("Укажите название букета.");
+
         var entity = new Service
         {
             Id = Guid.NewGuid(),
             Name = dto.Name.Trim(),
+            Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
+            FlowerComposition = string.IsNullOrWhiteSpace(dto.FlowerComposition) ? null : dto.FlowerComposition.Trim(),
+            ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
             Price = dto.Price,
             EstimatedTime = dto.EstimatedTime,
             SpecializationId = dto.SpecializationId,
@@ -103,7 +117,13 @@ public static class AdminCatalogHandler
         if (!await db.Specialization.AnyAsync(sp => sp.Id == dto.SpecializationId))
             return Results.BadRequest("Специализация не найдена.");
 
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return Results.BadRequest("Укажите название букета.");
+
         s.Name = dto.Name.Trim();
+        s.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+        s.FlowerComposition = string.IsNullOrWhiteSpace(dto.FlowerComposition) ? null : dto.FlowerComposition.Trim();
+        s.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
         s.Price = dto.Price;
         s.EstimatedTime = dto.EstimatedTime;
         s.SpecializationId = dto.SpecializationId;
@@ -257,5 +277,40 @@ public static class AdminCatalogHandler
         t.CustomerId = dto.CustomerId;
         await db.SaveChangesAsync();
         return Results.Ok();
+    }
+
+    public static async Task<IResult> UploadBouquetImage(
+        IFormFile file,
+        ClaimsPrincipal user,
+        IWebHostEnvironment env)
+    {
+        if (!IsAdmin(user))
+            return Results.Forbid();
+
+        if (file.Length == 0)
+            return Results.BadRequest("Файл пустой.");
+
+        string ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext is not (".jfif" or ".jpg" or ".jpeg" or ".png" or ".webp"))
+            return Results.BadRequest("Поддерживаются JPG, PNG, WEBP, JFIF.");
+
+        string? solutionRoot = IO.Directory.GetParent(env.ContentRootPath)?.FullName;
+        if (solutionRoot is null)
+            return Results.Problem("Не найден каталог решения.");
+
+        string targetDir = IO.Path.Combine(solutionRoot, "borealis-flowers.ui", "wwwroot", "images", "bouquets");
+        IO.Directory.CreateDirectory(targetDir);
+
+        string safeStem = IO.Path.GetFileNameWithoutExtension(file.FileName)
+            .Replace(" ", "-", StringComparison.Ordinal);
+        string fileName = safeStem + ext;
+        string targetPath = IO.Path.Combine(targetDir, fileName);
+
+        await using (IO.FileStream stream = IO.File.Create(targetPath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        return Results.Ok(new { url = $"/images/bouquets/{fileName}" });
     }
 }
