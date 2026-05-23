@@ -11,6 +11,12 @@ public class Service
     public Guid SpecializationId { get; set; }
     public Specialization Specialization { get; set; }
 
+    /// <summary>Флорист, который собирает этот букет.</summary>
+    public Guid? SpecialistId { get; set; }
+
+    [ForeignKey(nameof(SpecialistId))]
+    public Specialist? Specialist { get; set; }
+
     public string Name { get; set; }
     public string? Description { get; set; }
     /// <summary>Состав цветов (для карточки каталога).</summary>

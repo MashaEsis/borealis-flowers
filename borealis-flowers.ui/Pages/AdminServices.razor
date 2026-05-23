@@ -66,6 +66,8 @@
 
     List<SpecializationRowDto>? _specs;
 
+    List<FloristStaffDto>? _florists;
+
     readonly Dictionary<Guid, ServiceEditState> _edits = new();
 
     ServiceEditState? _newEdit;
@@ -97,6 +99,7 @@
         {
             _services = await Api.Http.GetFromJsonAsync<List<ServiceRowDto>>("admin/catalog/services");
             _specs = await Api.Http.GetFromJsonAsync<List<SpecializationRowDto>>("admin/catalog/specializations");
+            _florists = await Api.Http.GetFromJsonAsync<List<FloristStaffDto>>("staff/florists");
         }
         catch
         {
@@ -113,6 +116,7 @@
         _newEdit = new ServiceEditState
         {
             SpecializationIdString = _specs?.FirstOrDefault()?.Id.ToString("D") ?? "",
+            SpecialistIdString = _florists?.FirstOrDefault(f => f.IsActive && f.SpecialistId is not null)?.SpecialistId?.ToString("D") ?? "",
             Price = 2500,
             EstimatedTime = 45,
         };
@@ -137,6 +141,7 @@
                 Price = s.Price,
                 EstimatedTime = s.EstimatedTime ?? 0,
                 SpecializationIdString = s.SpecializationId.ToString("D"),
+                SpecialistIdString = s.SpecialistId?.ToString("D") ?? "",
             };
             _edits[s.Id] = edit;
         }
@@ -161,6 +166,21 @@
                     @foreach (SpecializationRowDto sp in _specs!)
                     {
                         <option value="@sp.Id.ToString("D")">@sp.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Флорист</label>
+                <select @bind="edit.SpecialistIdString">
+                    <option value="">— выберите —</option>
+                    @if (_florists is not null)
+                    {
+                        @foreach (FloristStaffDto f in _florists.Where(x => x.IsActive && x.SpecialistId is not null))
+                        {
+                            <option value="@f.SpecialistId!.Value.ToString("D")">
+                                @(f.SpecialistName ?? f.Name)
+                            </option>
+                        }
                     }
                 </select>
             </div>
@@ -226,6 +246,12 @@
             return false;
         }
 
+        if (!Guid.TryParse(edit.SpecialistIdString, out Guid floristId) || floristId == Guid.Empty)
+        {
+            error = "Выберите флориста для букета.";
+            return false;
+        }
+
         dto = new ServiceEditDto
         {
             Name = edit.Name.Trim(),
@@ -235,6 +261,7 @@
             Price = edit.Price,
             EstimatedTime = edit.EstimatedTime > 0 ? edit.EstimatedTime : null,
             SpecializationId = specId,
+            SpecialistId = floristId,
         };
         return true;
     }
@@ -309,6 +336,8 @@
                 row.Price = dto.Price;
                 row.EstimatedTime = dto.EstimatedTime;
                 row.SpecializationId = dto.SpecializationId;
+                row.SpecialistId = dto.SpecialistId;
+                row.SpecialistName = _florists?.FirstOrDefault(f => f.SpecialistId == dto.SpecialistId)?.SpecialistName;
                 row.SpecializationName = _specs?.FirstOrDefault(sp => sp.Id == dto.SpecializationId)?.Name
                     ?? row.SpecializationName;
             }
@@ -398,6 +427,7 @@
         public double Price { get; set; }
         public int EstimatedTime { get; set; }
         public string SpecializationIdString { get; set; } = "";
+        public string SpecialistIdString { get; set; } = "";
     }
 
 }

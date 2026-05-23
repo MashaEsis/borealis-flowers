@@ -30,6 +30,12 @@ namespace borealis_flowers.api.Data.Models
         public string? VisitorId { get; set; }
         public string? ExternalUserId { get; set; }
         public DateTime? Birthday { get; set; }
+
+        /// <summary>Баланс личного счёта клиента (симуляция).</summary>
+        public double WalletBalance { get; set; }
+
         public List<Timeslot>? Timeslots { get; set; }
+
+        public List<PaymentCard>? PaymentCards { get; set; }
     }
 }

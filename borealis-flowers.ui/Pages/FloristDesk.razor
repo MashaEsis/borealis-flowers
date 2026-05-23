@@ -30,11 +30,47 @@
                 @foreach (OrderRowDto o in _rows)
                 {
                     <article class="card-panel" style="margin-bottom:.85rem;">
-                        <p class="status-pill">
+                        <p class="status-pill @OrderStateUi.CssClass(o.OrderStatus)">
                             @(o.OrderKind == 1 ? "Мероприятие" : "Букет") · @OrderStateUi.Russian(o.OrderStatus, o.OrderKind)
                         </p>
                 <p class="muted-small" style="margin:.4rem 0 .2rem;">@o.CreatedAt.ToLocalTime():g</p>
                 <p style="margin:0 .2rem .75rem;">@(o.Description ?? "")</p>
+
+                @if (o.OrderKind == 0)
+                {
+                    <dl class="order-client-info">
+                        <div>
+                            <dt>Клиент</dt>
+                            <dd>@(string.IsNullOrWhiteSpace(o.CustomerName) ? "—" : o.CustomerName)</dd>
+                        </div>
+                        <div>
+                            <dt>Телефон</dt>
+                            <dd>@(string.IsNullOrWhiteSpace(o.CustomerPhoneSnapshot) ? "—" : o.CustomerPhoneSnapshot)</dd>
+                        </div>
+                        <div>
+                            <dt>Адрес доставки</dt>
+                            <dd>@(string.IsNullOrWhiteSpace(o.DeliveryAddress) ? "—" : o.DeliveryAddress)</dd>
+                        </div>
+                        @if (o.DeliveryLatitude is double lat && o.DeliveryLongitude is double lng)
+                        {
+                            <div>
+                                <dt>Точка на карте</dt>
+                                <dd>
+                                    <a class="link-accent" href="@MapLink(lat, lng)" target="_blank" rel="noopener">
+                                        Открыть в OpenStreetMap
+                                    </a>
+                                </dd>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(o.CardMessage))
+                        {
+                            <div>
+                                <dt>Текст для открытки</dt>
+                                <dd>@o.CardMessage</dd>
+                            </div>
+                        }
+                    </dl>
+                }
 
                 @if (o.OrderKind == 1 && o.OrderStatus == 2)
                 {
@@ -54,19 +90,84 @@
                     </div>
                 }
 
-                <div class="field" style="max-width:420px;">
-                    <label>Смена статуса</label>
-                    <select @onchange="@(e => SetPending(o.Id, e.Value))">
-                        @foreach (var opt in StatusOptions(o))
+                @if (o.OrderKind == 0)
+                {
+                    <div class="order-status-block">
+                        <p class="muted-small" style="margin:0 0 .5rem;">Этапы заказа</p>
+                        <ul class="order-timeline florist-timeline">
+                            @foreach ((int step, string label) in FloristOrderUi.BouquetSteps)
+                            {
+                                bool done = FloristOrderUi.IsStepReached(o.OrderStatus, step);
+                                bool current = o.OrderStatus == step;
+                                <li class="@(done ? "done" : "") @(current ? "current" : "")">@label</li>
+                            }
+                        </ul>
+
+                        @if (_orderErr.TryGetValue(o.Id, out string? cardErr))
                         {
-                            <option value="@opt.V" selected="@(o.OrderStatus==opt.V)">@opt.Label</option>
+                            <div class="notice-banner" style="margin:.65rem 0;">@cardErr</div>
                         }
-                    </select>
-                </div>
-                <button type="button" class="btn btn-primary" style="margin-top:.5rem;"
-                        @onclick="@(() => SaveState(o))">
-                    Применить
-                </button>
+
+                        @if (FloristOrderUi.IsBouquetLocked(o.OrderStatus))
+                        {
+                            <p class="muted-small" style="margin:.5rem 0 0;">Статус зафиксирован.</p>
+                        }
+                        else if (o.OrderStatus >= 1)
+                        {
+                            <p class="muted-small" style="margin:.5rem 0 .45rem;">
+                                Заказ в работе — доступен только следующий шаг.
+                            </p>
+                            <div class="order-card-actions">
+                                @foreach ((int st, string label) in FloristOrderUi.NextActions(o.OrderStatus))
+                                {
+                                    <button type="button" class="btn @(st == 7 ? "btn-ghost" : "btn-primary")"
+                                            style="font-size:.85rem;padding:.4rem .8rem;"
+                                            disabled="@(_busyId == o.Id)"
+                                            @onclick="@(() => SaveStateAsync(o, st))">
+                                        @label
+                                    </button>
+                                }
+                            </div>
+                            @if (o.OrderStatus == 1)
+                            {
+                                <p class="muted-small" style="margin:.45rem 0 0;">
+                                    «Принять заказ» спишет стоимость букета со счёта клиента.
+                                </p>
+                            }
+                        }
+                        else
+                        {
+                            <div class="order-card-actions" style="margin-top:.5rem;">
+                                @foreach ((int st, string label) in FloristOrderUi.NextActions(o.OrderStatus))
+                                {
+                                    <button type="button" class="btn @(st == 7 ? "btn-ghost" : "btn-primary")"
+                                            style="font-size:.85rem;padding:.4rem .8rem;"
+                                            disabled="@(_busyId == o.Id)"
+                                            @onclick="@(() => SaveStateAsync(o, st))">
+                                        @label
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="field" style="max-width:420px;">
+                        <label>Смена статуса</label>
+                        <select @onchange="@(e => SetPending(o.Id, e.Value))">
+                            @foreach (var opt in EventStatusOptions(o))
+                            {
+                                <option value="@opt.V" selected="@(o.OrderStatus==opt.V)">@opt.Label</option>
+                            }
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary" style="margin-top:.5rem;"
+                            disabled="@(_busyId == o.Id)"
+                            @onclick="@(() => SaveEventStateAsync(o))">
+                        Применить
+                    </button>
+                }
             </article>
         }
     }
@@ -107,6 +208,10 @@
 
     readonly Dictionary<Guid, double?> _quote = new();
 
+    readonly Dictionary<Guid, string> _orderErr = new();
+
+    Guid? _busyId;
+
     protected override async Task OnInitializedAsync()
     {
         if ((!Session.IsFlorist && !Session.IsAdmin) || Session.ActingFloristId == Guid.Empty)
@@ -121,6 +226,8 @@
         {
             _rows = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/florist");
             _hist = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/florist/history");
+            _pending.Clear();
+            _error = null;
         }
         catch
         {
@@ -135,8 +242,45 @@
         _pending[id] = int.Parse(v.ToString()!);
     }
 
-    async Task SaveState(OrderRowDto o)
+    async Task SaveStateAsync(OrderRowDto o, int targetStatus)
     {
+        _error = null;
+        _orderErr.Remove(o.Id);
+
+        if (!FloristOrderUi.CanFloristChange(o.OrderStatus, targetStatus))
+        {
+            _orderErr[o.Id] = "Недопустимый переход статуса.";
+            return;
+        }
+
+        _busyId = o.Id;
+        try
+        {
+            var dto = new UpdateOrderStateDto { OrderStatus = targetStatus, Resolution = null };
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync($"orders/{o.Id:D}/state", dto);
+            if (!res.IsSuccessStatusCode)
+            {
+                string msg = await res.Content.ReadAsStringAsync();
+                await Reload();
+                _orderErr[o.Id] = string.IsNullOrWhiteSpace(msg) ? "Не удалось сменить статус." : msg;
+                return;
+            }
+
+            await Reload();
+        }
+        catch
+        {
+            _orderErr[o.Id] = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    async Task SaveEventStateAsync(OrderRowDto o)
+    {
+        _error = null;
         int st = _pending.TryGetValue(o.Id, out int p) ? p : o.OrderStatus;
         var dto = new UpdateOrderStateDto { OrderStatus = st, Resolution = null };
         if (st == 3 && o.OrderKind == 1)
@@ -146,8 +290,23 @@
             dto.QuoteTotal = _quote.GetValueOrDefault(o.Id);
         }
 
-        await Api.Http.PutAsJsonAsync($"orders/{o.Id:D}/state", dto);
-        await Reload();
+        _busyId = o.Id;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync($"orders/{o.Id:D}/state", dto);
+            if (!res.IsSuccessStatusCode)
+            {
+                string msg = await res.Content.ReadAsStringAsync();
+                _error = string.IsNullOrWhiteSpace(msg) ? "Не удалось сменить статус." : msg;
+                return;
+            }
+
+            await Reload();
+        }
+        finally
+        {
+            _busyId = null;
+        }
     }
 
     void SetQuote(Guid id, object? v)
@@ -162,34 +321,18 @@
             _quote[id] = d;
     }
 
-    static IEnumerable<(int V, string Label)> StatusOptions(OrderRowDto o)
+    static IEnumerable<(int V, string Label)> EventStatusOptions(OrderRowDto o)
     {
-        if (o.OrderKind == 0)
-        {
-            foreach (int status in BouquetFloristStatuses(o.OrderStatus))
-                yield return (status, OrderStateUi.Russian(status, 0));
-        }
-        else
-        {
-            yield return (0, "Новый");
-            yield return (2, "Согласование материалов");
-            yield return (3, "Ожидает одобрения");
-            yield return (4, "Подтверждён");
-            yield return (1, "В работе");
-            yield return (5, "Готов");
-            yield return (7, "Отклонён");
-        }
+        yield return (0, "Новый");
+        yield return (2, "Согласование материалов");
+        yield return (3, "Ожидает одобрения");
+        yield return (4, "Подтверждён");
+        yield return (1, "В работе");
+        yield return (5, "Готов");
+        yield return (7, "Отклонён");
     }
 
-    static IEnumerable<int> BouquetFloristStatuses(int current) =>
-        current switch
-        {
-            0 => [0, 1, 7],
-            1 => [1, 4, 7],
-            4 => [4, 5],
-            5 => [5, 8],
-            8 => [8],
-            _ => [current],
-        };
+    static string MapLink(double lat, double lng) =>
+        $"https://www.openstreetmap.org/?mlat={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&mlon={lng.ToString(System.Globalization.CultureInfo.InvariantCulture)}#map=17/{lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}/{lng.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
 }

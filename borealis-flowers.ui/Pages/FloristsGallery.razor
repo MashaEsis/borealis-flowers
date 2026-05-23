@@ -1,4 +1,5 @@
 @page "/florists"
+@using borealis_flowers.ui.Helpers
 
 @inject FloristCatalogService FloristCatalogService
 
@@ -21,14 +22,14 @@
             </h2>
 
             <p class="muted-small" style="margin:0;line-height:1.4;">
-                @(string.IsNullOrWhiteSpace(florist.City) ? "Казань" : florist.City)
+                @(string.IsNullOrWhiteSpace(florist.City) ? StudioConstants.City : florist.City)
                 · @(string.IsNullOrWhiteSpace(florist.Specialization) ? "Студийные композиции" : florist.Specialization)
             </p>
 
             <p class="muted-small" style="margin:.5rem 0 0;line-height:1.5;">@florist.StyleDescription</p>
 
             <div class="portfolio-preview portfolio-preview-compact">
-                @foreach (string url in FloristCatalogService.BuildPortfolioPreview(florist.Id, 3))
+                @foreach (string url in FloristCatalogService.PreviewFor(florist, 3))
                 {
                     <img src="@url" alt="Работа" loading="lazy"/>
                 }

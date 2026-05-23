@@ -53,9 +53,21 @@ public class Request
     /// <summary>Пожелания клиента по мероприятию.</summary>
     public string? WishNotes { get; set; }
 
+    /// <summary>Текст для открытки к букету.</summary>
+    public string? CardMessage { get; set; }
+
+    /// <summary>Адрес доставки (текст).</summary>
+    public string? DeliveryAddress { get; set; }
+
+    public double? DeliveryLatitude { get; set; }
+
+    public double? DeliveryLongitude { get; set; }
+
+    /// <summary>Телефон клиента на момент заказа.</summary>
+    public string? CustomerPhoneSnapshot { get; set; }
+
     public string? FloristMaterials { get; set; }
     public string? FloristInventory { get; set; }
-    public double? QuoteTotal { get; set; }
     public DateTime? DepartureAtUtc { get; set; }
 
     public string? AdminComment { get; set; }
@@ -63,4 +75,17 @@ public class Request
 
     public DateTime? ClientConfirmedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+
+    /// <summary>Цена букета на момент заказа.</summary>
+    public double? QuoteTotal { get; set; }
+
+    /// <summary>Фактически списано с кошелька (с учётом скидки).</summary>
+    public double? ChargedAmount { get; set; }
+
+    /// <summary>Скидка лояльности, %.</summary>
+    public int DiscountPercent { get; set; }
+
+    public bool IsPaid { get; set; }
+
+    public DateTime? PaidAtUtc { get; set; }
 }

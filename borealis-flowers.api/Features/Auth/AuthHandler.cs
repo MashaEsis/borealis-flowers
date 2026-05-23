@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using borealis_flowers.api.Data;
 using borealis_flowers.api.Data.Models;
+using borealis_flowers.api.Features.Wallet;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +40,7 @@ public static class AuthHandler
         return Results.Ok(new AuthResponse
         {
             Token = token,
-            User = UserMeDtoExtensions.FromCustomer(customer),
+            User = await UserMeDtoExtensions.FromCustomerAsync(customer, db),
         });
     }
 
@@ -58,13 +59,15 @@ public static class AuthHandler
             return Results.Unauthorized();
 
         customer.LastVisit = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        await db.Customers
+            .Where(c => c.Id == customer.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastVisit, DateTime.UtcNow));
 
         string token = jwt.CreateToken(customer);
         return Results.Ok(new AuthResponse
         {
             Token = token,
-            User = UserMeDtoExtensions.FromCustomer(customer),
+            User = await UserMeDtoExtensions.FromCustomerAsync(customer, db),
         });
     }
 
@@ -77,7 +80,7 @@ public static class AuthHandler
         Customer? customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
         return customer is null
             ? Results.NotFound()
-            : Results.Ok(UserMeDtoExtensions.FromCustomer(customer));
+            : Results.Ok(await UserMeDtoExtensions.FromCustomerAsync(customer, db));
     }
 
     public static async Task<IResult> UpdateProfileAsync(
@@ -111,14 +114,16 @@ public static class AuthHandler
         customer.LastVisit = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return Results.Ok(UserMeDtoExtensions.FromCustomer(customer));
+        return Results.Ok(await UserMeDtoExtensions.FromCustomerAsync(customer, db));
     }
 }
 
 public static class UserMeDtoExtensions
 {
-    public static UserMeDto FromCustomer(Customer c) =>
-        new()
+    public static async Task<UserMeDto> FromCustomerAsync(Customer c, DataContext db)
+    {
+        (int progress, bool nextDiscount) = await WalletService.GetLoyaltyAsync(db, c.Id);
+        return new UserMeDto
         {
             Id = c.Id,
             Name = c.Name,
@@ -129,5 +134,10 @@ public static class UserMeDtoExtensions
             IsAdmin = c.IsAdmin,
             IsSpecialist = c.IsSpecialist,
             SpecialistId = c.SpecialistId,
+            WalletBalance = c.WalletBalance,
+            LoyaltyProgress = progress,
+            LoyaltyTarget = WalletService.LoyaltyEvery,
+            NextOrderDiscount = nextDiscount,
         };
+    }
 }

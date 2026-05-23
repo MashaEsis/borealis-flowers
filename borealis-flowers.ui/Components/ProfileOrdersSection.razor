@@ -1,0 +1,205 @@
+@inject BackendApiClient Api
+@implements IDisposable
+
+<section class="card-panel profile-orders">
+    <div class="profile-orders-head">
+        <div class="segmented-control">
+            <button type="button" class="@(!_archive ? "active" : "")" @onclick="@(() => _archive = false)">Текущие</button>
+            <button type="button" class="@(_archive ? "active" : "")" @onclick="@(() => _archive = true)">Архив</button>
+        </div>
+    </div>
+
+    @if (!_archive)
+    {
+        <div class="order-kind-tabs">
+            <button type="button" class="@(_kindTab==0 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _kindTab=0)">Букеты</button>
+            <button type="button" class="@(_kindTab==1 ? "btn btn-primary" : "btn btn-ghost")" @onclick="@(() => _kindTab=1)">Мероприятия</button>
+        </div>
+    }
+
+    @if (_err is not null)
+    {
+        <div class="notice-banner" style="margin-top:.75rem;">@_err</div>
+    }
+
+    @if (_visible is null)
+    {
+        <p class="muted-small" style="margin-top:.75rem;">Загрузка…</p>
+    }
+    else if (_visible.Count == 0)
+    {
+        <p class="muted-small" style="margin-top:.75rem;">@EmptyMessage</p>
+    }
+    else
+    {
+        <OrderCardList Orders="_visible"
+                       Archive="_archive"
+                       ConfirmCancelId="_confirmCancelId"
+                       BusyId="_busyId"
+                       OnOpenDetail="OpenDetail"
+                       OnRequestCancel="RequestCancel"
+                       OnDismissCancel="DismissCancel"
+                       OnCancel="CancelOrderAsync"
+                       OnConfirmReceived="ConfirmReceivedAsync"/>
+    }
+
+    <div style="margin-top:.85rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+        <NavLink class="btn btn-soft" href="/services" style="text-decoration:none;display:inline-flex;">Новый букет</NavLink>
+        <NavLink class="btn btn-ghost" href="/events" style="text-decoration:none;display:inline-flex;">Мероприятие</NavLink>
+    </div>
+</section>
+
+<OrderDetailModal Order="_detailOrder" Visible="_detailOpen" OnClose="CloseDetail"/>
+
+@code {
+
+    bool _archive;
+
+    int _kindTab;
+
+    List<OrderRowDto>? _active;
+
+    List<OrderRowDto>? _history;
+
+    string? _err;
+
+    Guid? _confirmCancelId;
+
+    Guid? _busyId;
+
+    OrderRowDto? _detailOrder;
+
+    bool _detailOpen;
+
+    PeriodicTimer? _pollTimer;
+
+    List<OrderRowDto>? _visible =>
+        _archive
+            ? _history
+            : _kindTab switch
+            {
+                0 => _active?.Where(OrderCardFormatter.IsBouquet).ToList(),
+                _ => _active?.Where(o => !OrderCardFormatter.IsBouquet(o)).ToList(),
+            };
+
+    string EmptyMessage =>
+        _archive ? "Архив пуст." : _kindTab == 0 ? "Нет активных букетов." : "Нет активных мероприятий.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _pollTimer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        _ = PollOrdersAsync();
+    }
+
+    void OpenDetail(OrderRowDto o)
+    {
+        _detailOrder = o;
+        _detailOpen = true;
+    }
+
+    void CloseDetail()
+    {
+        _detailOpen = false;
+        _detailOrder = null;
+    }
+
+    void RequestCancel(OrderRowDto o) => _confirmCancelId = o.Id;
+
+    void DismissCancel() => _confirmCancelId = null;
+
+    async Task PollOrdersAsync()
+    {
+        if (_pollTimer is null)
+            return;
+
+        try
+        {
+            while (await _pollTimer.WaitForNextTickAsync())
+            {
+                await Reload();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public async Task Reload()
+    {
+        try
+        {
+            _active = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine");
+            _history = await Api.Http.GetFromJsonAsync<List<OrderRowDto>>("orders/mine/history");
+            _err = null;
+        }
+        catch
+        {
+            _err = "Не удалось загрузить заказы.";
+        }
+    }
+
+    async Task CancelOrderAsync(OrderRowDto o)
+    {
+        _busyId = o.Id;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                $"orders/{o.Id:D}/state",
+                new UpdateOrderStateDto { OrderStatus = 7, Resolution = "Отменено клиентом" });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _err = "Не удалось отменить заказ.";
+                return;
+            }
+
+            _confirmCancelId = null;
+            CloseDetail();
+            await Reload();
+        }
+        catch
+        {
+            _err = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    async Task ConfirmReceivedAsync(OrderRowDto o)
+    {
+        _busyId = o.Id;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                $"orders/{o.Id:D}/state",
+                new UpdateOrderStateDto { OrderStatus = 6 });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _err = "Не удалось подтвердить получение.";
+                return;
+            }
+
+            CloseDetail();
+            await Reload();
+        }
+        catch
+        {
+            _err = "Ошибка сети.";
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _pollTimer?.Dispose();
+    }
+
+}

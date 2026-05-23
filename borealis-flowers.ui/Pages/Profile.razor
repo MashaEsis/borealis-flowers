@@ -2,14 +2,13 @@
 @inject BackendApiClient Api
 @inject AppSessionService Session
 @inject BrowserStorageService Browser
+@using borealis_flowers.ui.Helpers
 
-<section class="card-panel">
-    <h1 style="margin-top:0;">Профиль</h1>
-
+<section class="card-panel profile-compact">
     @if (Session.IsVisitor)
     {
         <div class="notice-banner">
-            <NavLink class="link-accent" href="/login">Войдите</NavLink>, чтобы редактировать профиль.
+            <NavLink class="link-accent" href="/login">Войдите</NavLink>, чтобы открыть профиль.
         </div>
     }
     else if (_error is not null && _profile is null)
@@ -22,46 +21,78 @@
     }
     else
     {
-        @if (_saved)
-        {
-            <div class="notice-banner" style="margin-bottom:1rem;">Изменения сохранены.</div>
-        }
+        <div class="profile-top">
+            <div>
+                <h1 style="margin:0;font-size:1.2rem;">@_name</h1>
+                <p class="muted-small" style="margin:.25rem 0 0;">@DescribeRole(Session.Role)</p>
+            </div>
+            @if (_saved)
+            {
+                <span class="status-pill status-done">Сохранено</span>
+            }
+        </div>
+
         @if (_error is not null)
         {
-            <div class="notice-banner" style="margin-bottom:1rem;">@_error</div>
+            <div class="notice-banner" style="margin-top:.75rem;">@_error</div>
         }
 
-        <div class="field">
-            <label>Имя</label>
-            <input type="text" @bind="_name" placeholder="Как к вам обращаться"/>
+        <div class="profile-fields">
+            <div class="field">
+                <label>Email</label>
+                <input type="email" @bind="_email"/>
+            </div>
+            <div class="field">
+                <label>Телефон</label>
+                <input type="tel" @bind="_phone" placeholder="@StudioConstants.PhoneExample"/>
+            </div>
+            <div class="field">
+                <label>Имя</label>
+                <input type="text" @bind="_name"/>
+            </div>
+            <div class="field">
+                <label>День рождения</label>
+                <input type="date" @bind="_birthday" class="form-input"/>
+            </div>
         </div>
-
-        <div class="field">
-            <label>Email</label>
-            <input type="email" @bind="_email" placeholder="email@example.com"/>
-        </div>
-
-        <div class="field">
-            <label>Телефон</label>
-            <input type="tel" @bind="_phone" placeholder="+7 …"/>
-        </div>
-
-        <div class="field">
-            <label>Дата рождения</label>
-            <input type="date" @bind="_birthday" class="form-input"/>
-        </div>
-
-        <p class="muted-small">Роль: @DescribeRole(Session.Role)</p>
 
         <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
-            @(_busy ? "Сохранение…" : "Сохранить")
+            @(_busy ? "…" : "Сохранить")
         </button>
     }
 </section>
 
+@if (Session.IsClient && _profile is not null)
+{
+    <WalletSection @ref="_wallet"/>
+}
+
+@if (!Session.IsVisitor && !Session.IsClient)
+{
+    <section class="card-panel">
+        <div class="profile-links">
+            @if (Session.IsFlorist || Session.IsAdmin)
+            {
+                <NavLink class="profile-link-card" href="/cabinet/florist">
+                    <strong>Рабочий стол</strong>
+                    <span class="muted-small">Заказы букетов</span>
+                </NavLink>
+                <NavLink class="profile-link-card" href="/cabinet/florist/portfolio">
+                    <strong>Портфолио</strong>
+                </NavLink>
+            }
+            <NavLink class="profile-link-card" href="/florists">
+                <strong>Флористы</strong>
+            </NavLink>
+        </div>
+    </section>
+}
+
 @code {
 
     UserMeDto? _profile;
+
+    WalletSection? _wallet;
 
     string _name = "";
 
@@ -105,7 +136,7 @@
         }
         catch
         {
-            _error = "Не удалось загрузить профиль. Проверьте API.";
+            _error = "Не удалось загрузить профиль.";
         }
     }
 
@@ -135,13 +166,13 @@
 
             if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                _error = "Пользователь с таким email уже есть.";
+                _error = "Email уже занят.";
                 return;
             }
 
             if (!res.IsSuccessStatusCode)
             {
-                _error = "Не удалось сохранить профиль.";
+                _error = "Не удалось сохранить.";
                 return;
             }
 

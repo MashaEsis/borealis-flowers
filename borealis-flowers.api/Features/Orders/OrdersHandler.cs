@@ -3,6 +3,7 @@ using System.Security.Claims;
 using borealis_flowers.api.Data;
 using borealis_flowers.api.Data.Models;
 using borealis_flowers.api.Infrastructure;
+using borealis_flowers.api.Features.Wallet;
 using Microsoft.EntityFrameworkCore;
 
 namespace borealis_flowers.api.Features.Orders;
@@ -13,6 +14,11 @@ public static class OrdersHandler
     {
         public Guid ServiceId { get; set; }
         public string? Comment { get; set; }
+        public string? CardMessage { get; set; }
+        public string DeliveryAddress { get; set; } = "";
+        public double DeliveryLatitude { get; set; }
+        public double DeliveryLongitude { get; set; }
+        public string? Phone { get; set; }
     }
 
     /// <summary>Заказ мероприятия (форма заявки).</summary>
@@ -57,6 +63,15 @@ public static class OrdersHandler
         public DateTime? CompletedAtUtc { get; set; }
         public DateTime CreatedAt { get; set; }
         public string? Description { get; set; }
+        public string? CardMessage { get; set; }
+        public string? DeliveryAddress { get; set; }
+        public double? DeliveryLatitude { get; set; }
+        public double? DeliveryLongitude { get; set; }
+        public string? CustomerPhoneSnapshot { get; set; }
+        public double? ChargedAmount { get; set; }
+        public int DiscountPercent { get; set; }
+        public bool IsPaid { get; set; }
+        public DateTime? PaidAtUtc { get; set; }
     }
 
     public sealed class UpdateOrderStateDto
@@ -85,15 +100,33 @@ public static class OrdersHandler
         if (service is null)
             return Results.NotFound("Услуга не найдена.");
 
-        List<Guid> florists = await db.Specialists.AsNoTracking()
-            .Where(s => s.IsActive)
-            .Select(s => s.Id)
-            .ToListAsync();
-        if (florists.Count == 0)
-            return Results.BadRequest("Нет активных флористов в системе.");
+        if (service.SpecialistId is not Guid specialistId)
+            return Results.BadRequest("У этого букета не назначен флорист. Обратитесь к администратору.");
 
-        Guid specialistId = florists[Random.Shared.Next(florists.Count)];
-        string note = string.IsNullOrWhiteSpace(dto.Comment) ? "" : $" · {dto.Comment.Trim()}";
+        if (!await db.Specialists.AnyAsync(s => s.Id == specialistId && s.IsActive))
+            return Results.BadRequest("Флорист букета недоступен.");
+
+        if (string.IsNullOrWhiteSpace(dto.DeliveryAddress))
+            return Results.BadRequest("Укажите адрес доставки.");
+
+        if (dto.DeliveryLatitude is < -90 or > 90 || dto.DeliveryLongitude is < -180 or > 180)
+            return Results.BadRequest("Выберите точку доставки на карте.");
+
+        Customer? customer = await db.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == cid);
+        if (customer is null)
+            return Results.Unauthorized();
+
+        string phone = string.IsNullOrWhiteSpace(dto.Phone)
+            ? (customer.Phone ?? "")
+            : dto.Phone.Trim();
+        if (string.IsNullOrWhiteSpace(phone))
+            return Results.BadRequest("Укажите телефон для связи.");
+
+        string address = dto.DeliveryAddress.Trim();
+        string? card = string.IsNullOrWhiteSpace(dto.CardMessage) ? null : dto.CardMessage.Trim();
+        string? note = string.IsNullOrWhiteSpace(dto.Comment) ? null : dto.Comment.Trim();
+
         var request = new Request
         {
             Id = Guid.NewGuid(),
@@ -103,7 +136,15 @@ public static class OrdersHandler
             ServiceId = service.Id,
             ServiceTitleSnapshot = service.Name,
             OrderStatus = OrderStatus.New,
-            Description = $"[Букет] {service.Name} — {service.Price:N0} ₽{note}",
+            CardMessage = card,
+            DeliveryAddress = address,
+            DeliveryLatitude = dto.DeliveryLatitude,
+            DeliveryLongitude = dto.DeliveryLongitude,
+            CustomerPhoneSnapshot = phone,
+            QuoteTotal = service.Price,
+            Description =
+                $"[Букет] {service.Name} — {service.Price:N0} ₽ · {address}" +
+                (note is not null ? $" · {note}" : ""),
             CreatedAt = DateTime.UtcNow,
         };
         await db.Requests.AddAsync(request);
@@ -318,6 +359,15 @@ public static class OrdersHandler
                 return Results.Forbid();
         }
 
+        if (next == OrderStatus.Approved &&
+            r.OrderKind == OrderKind.Bouquet &&
+            r.OrderStatus == OrderStatus.InProgress)
+        {
+            IResult? paymentError = await WalletService.TryChargeBouquetAsync(db, r);
+            if (paymentError is not null)
+                return paymentError;
+        }
+
         ApplyDto(r, dto, next);
         r.UpdatedAt = DateTime.UtcNow;
         if (next == OrderStatus.HandedToCourier && r.DepartureAtUtc is null)
@@ -461,6 +511,15 @@ public static class OrdersHandler
             CompletedAtUtc = r.CompletedAtUtc,
             CreatedAt = r.CreatedAt,
             Description = r.Description,
+            CardMessage = r.CardMessage,
+            DeliveryAddress = r.DeliveryAddress,
+            DeliveryLatitude = r.DeliveryLatitude,
+            DeliveryLongitude = r.DeliveryLongitude,
+            CustomerPhoneSnapshot = r.CustomerPhoneSnapshot,
+            ChargedAmount = r.ChargedAmount,
+            DiscountPercent = r.DiscountPercent,
+            IsPaid = r.IsPaid,
+            PaidAtUtc = r.PaidAtUtc,
         };
 
     static Guid? TryCustomerId(ClaimsPrincipal user)

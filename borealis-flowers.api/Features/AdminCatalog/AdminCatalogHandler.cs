@@ -22,6 +22,7 @@ public static class AdminCatalogHandler
         public string? ImageUrl { get; set; }
         public double Price { get; set; }
         public int? EstimatedTime { get; set; }
+        public Guid? SpecialistId { get; set; }
     }
 
     public sealed class SpecializationEditDto
@@ -61,6 +62,7 @@ public static class AdminCatalogHandler
 
         var list = await db.Services.AsNoTracking()
             .Include(s => s.Specialization)
+            .Include(s => s.Specialist)
             .OrderBy(s => s.Name)
             .Select(s => new
             {
@@ -72,7 +74,9 @@ public static class AdminCatalogHandler
                 s.Price,
                 s.EstimatedTime,
                 s.SpecializationId,
+                s.SpecialistId,
                 SpecializationName = s.Specialization.Name,
+                SpecialistName = s.Specialist != null ? s.Specialist.FullName : null,
             })
             .ToListAsync();
 
@@ -90,6 +94,10 @@ public static class AdminCatalogHandler
         if (string.IsNullOrWhiteSpace(dto.Name))
             return Results.BadRequest("Укажите название букета.");
 
+        if (dto.SpecialistId is not Guid floristId ||
+            !await db.Specialists.AnyAsync(s => s.Id == floristId && s.IsActive))
+            return Results.BadRequest("Выберите активного флориста для букета.");
+
         var entity = new Service
         {
             Id = Guid.NewGuid(),
@@ -100,6 +108,7 @@ public static class AdminCatalogHandler
             Price = dto.Price,
             EstimatedTime = dto.EstimatedTime,
             SpecializationId = dto.SpecializationId,
+            SpecialistId = floristId,
         };
         await db.Services.AddAsync(entity);
         await db.SaveChangesAsync();
@@ -120,6 +129,10 @@ public static class AdminCatalogHandler
         if (string.IsNullOrWhiteSpace(dto.Name))
             return Results.BadRequest("Укажите название букета.");
 
+        if (dto.SpecialistId is not Guid floristId ||
+            !await db.Specialists.AnyAsync(s => s.Id == floristId && s.IsActive))
+            return Results.BadRequest("Выберите активного флориста для букета.");
+
         s.Name = dto.Name.Trim();
         s.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
         s.FlowerComposition = string.IsNullOrWhiteSpace(dto.FlowerComposition) ? null : dto.FlowerComposition.Trim();
@@ -127,6 +140,7 @@ public static class AdminCatalogHandler
         s.Price = dto.Price;
         s.EstimatedTime = dto.EstimatedTime;
         s.SpecializationId = dto.SpecializationId;
+        s.SpecialistId = floristId;
         await db.SaveChangesAsync();
         return Results.Ok();
     }

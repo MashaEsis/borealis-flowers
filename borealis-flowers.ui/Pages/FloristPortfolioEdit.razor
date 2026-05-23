@@ -1,0 +1,345 @@
+@page "/cabinet/florist/portfolio"
+@using Microsoft.AspNetCore.Components.Forms
+@using borealis_flowers.ui.Helpers
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject NavigationManager Nav
+
+<section class="card-panel">
+    <h1 style="margin-top:0;">Моё портфолио</h1>
+    <p class="muted-small">Редактируйте описание, фото профиля и работы — клиенты увидят их в каталоге флористов.</p>
+
+    @if (!Session.IsFlorist && !Session.IsAdmin)
+    {
+        <div class="notice-banner">Раздел для флористов.</div>
+    }
+    else if (Session.ActingFloristId == Guid.Empty)
+    {
+        <div class="notice-banner">У учётной записи нет привязки к профилю флориста.</div>
+    }
+    else if (_loading)
+    {
+        <p class="muted-small">Загрузка…</p>
+    }
+    else if (_portfolio is null)
+    {
+        <div class="notice-banner">@(_error ?? "Не удалось загрузить портфолио.")</div>
+    }
+    else
+    {
+        @if (_saved)
+        {
+            <div class="notice-banner" style="margin-bottom:1rem;">Изменения сохранены.</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="notice-banner" style="margin-bottom:1rem;">@_error</div>
+        }
+
+        <div class="catalog-edit-layout" style="margin-bottom:1.25rem;">
+            <img src="@PortraitPreview" alt="" class="catalog-edit-photo"/>
+            <div style="flex:1;">
+                <div class="field">
+                    <label>Имя в портфолио</label>
+                    <input type="text" @bind="_fullName"/>
+                </div>
+                <div class="field">
+                    <label>Город</label>
+                    <input type="text" @bind="_city" placeholder="@StudioConstants.City"/>
+                </div>
+                <div class="field">
+                    <label>Фото профиля</label>
+                    <input type="url" @bind="_imgUrl" placeholder="/images/florists/…"/>
+                    <InputFile OnChange="UploadPortraitAsync" accept="image/*,.jfif" class="form-input" style="margin-top:.45rem;"/>
+                </div>
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Описание стиля</label>
+            <textarea rows="4" @bind="_styleDescription" placeholder="Расскажите о своём стиле, любимых цветах и подходе к композициям…"></textarea>
+        </div>
+
+        <button type="button" class="btn btn-primary" disabled="@_savingProfile" @onclick="SaveProfileAsync">
+            @(_savingProfile ? "Сохранение…" : "Сохранить профиль")
+        </button>
+
+        @if (Session.ActingFloristId != Guid.Empty)
+        {
+            <p class="muted-small" style="margin:1rem 0 .5rem;">
+                <NavLink class="link-accent" href="@($"/florists/{Session.ActingFloristId:D}/portfolio")">Посмотреть, как видят клиенты</NavLink>
+            </p>
+        }
+
+        <hr style="margin:1.5rem 0;border:none;border-top:1px solid rgba(0,0,0,.08);"/>
+
+        <h2 style="margin:0 0 .35rem;font-size:1.1rem;">Работы</h2>
+        <p class="muted-small" style="margin:0 0 1rem;">Добавляйте фото букетов и композиций из папки на компьютере.</p>
+
+        @if (_portfolio.Works.Count > 0)
+        {
+            <div class="fl-grid" style="margin-bottom:1rem;">
+                @foreach (PortfolioWorkDto work in _portfolio.Works)
+                {
+                    <figure class="portfolio-work-card">
+                        <img class="fl-photo" src="@work.ImageUrl" alt="@(work.Title ?? "Работа")" loading="lazy"/>
+                        @if (!string.IsNullOrWhiteSpace(work.Title))
+                        {
+                            <figcaption class="muted-small">@work.Title</figcaption>
+                        }
+                        <button type="button" class="btn btn-ghost" style="font-size:.78rem;padding:.25rem .5rem;margin-top:.35rem;"
+                                disabled="@(_deletingId == work.Id)"
+                                @onclick="@(() => DeleteWorkAsync(work))">
+                            Удалить
+                        </button>
+                    </figure>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="muted-small" style="margin-bottom:1rem;">Работ пока нет — добавьте первое фото.</p>
+        }
+
+        <article class="card-panel" style="border:1px dashed rgba(0,0,0,.12);">
+            <h3 style="margin:0 0 .75rem;font-size:1rem;">Добавить работу</h3>
+            <div class="field">
+                <label>Название (необязательно)</label>
+                <input type="text" @bind="_newWorkTitle" placeholder="Свадебный букет, весенняя композиция…"/>
+            </div>
+            <div class="field">
+                <label>Фото</label>
+                <input type="url" @bind="_newWorkUrl" placeholder="/images/florists/…"/>
+                <InputFile OnChange="UploadWorkAsync" accept="image/*,.jfif" class="form-input" style="margin-top:.45rem;"/>
+            </div>
+            <button type="button" class="btn btn-primary" disabled="@_addingWork" @onclick="AddWorkAsync">
+                @(_addingWork ? "Добавление…" : "Добавить в портфолио")
+            </button>
+        </article>
+    }
+</section>
+
+@code {
+
+    PortfolioDetailDto? _portfolio;
+
+    string _fullName = "";
+
+    string _city = "";
+
+    string _imgUrl = "";
+
+    string _styleDescription = "";
+
+    string _newWorkTitle = "";
+
+    string _newWorkUrl = "";
+
+    bool _loading = true;
+
+    bool _savingProfile;
+
+    bool _addingWork;
+
+    bool _saved;
+
+    string? _error;
+
+    Guid? _deletingId;
+
+    string PortraitPreview =>
+        string.IsNullOrWhiteSpace(_imgUrl)
+            ? "https://picsum.photos/seed/portrait/480/560"
+            : _imgUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if ((!Session.IsFlorist && !Session.IsAdmin) || Session.ActingFloristId == Guid.Empty)
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            _portfolio = await Api.Http.GetFromJsonAsync<PortfolioDetailDto>("specialists/me/portfolio");
+            if (_portfolio is null)
+            {
+                _error = "Портфолио не найдено.";
+                return;
+            }
+
+            _fullName = _portfolio.FullName;
+            _city = _portfolio.City;
+            _imgUrl = _portfolio.ImgUrl;
+            _styleDescription = _portfolio.StyleDescription;
+        }
+        catch
+        {
+            _error = "Не удалось загрузить портфолио. Проверьте API.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    async Task SaveProfileAsync()
+    {
+        _savingProfile = true;
+        _error = null;
+        _saved = false;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PutAsJsonAsync(
+                "specialists/me/portfolio",
+                new UpdatePortfolioDto
+                {
+                    FullName = _fullName.Trim(),
+                    City = _city.Trim(),
+                    StyleDescription = _styleDescription.Trim(),
+                    ImgUrl = _imgUrl.Trim(),
+                });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось сохранить профиль.";
+                return;
+            }
+
+            _portfolio = await res.Content.ReadFromJsonAsync<PortfolioDetailDto>();
+            _saved = true;
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _savingProfile = false;
+        }
+    }
+
+    async Task UploadPortraitAsync(InputFileChangeEventArgs e)
+    {
+        string? url = await UploadFileAsync(e.File);
+        if (url is not null)
+            _imgUrl = url;
+    }
+
+    async Task UploadWorkAsync(InputFileChangeEventArgs e)
+    {
+        string? url = await UploadFileAsync(e.File);
+        if (url is not null)
+            _newWorkUrl = url;
+    }
+
+    async Task<string?> UploadFileAsync(IBrowserFile? file)
+    {
+        if (file is null)
+            return null;
+
+        _error = null;
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using Stream stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            content.Add(new StreamContent(stream), "file", file.Name);
+
+            HttpResponseMessage res = await Api.Http.PostAsync("specialists/me/portfolio/upload", content);
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось загрузить фото.";
+                return null;
+            }
+
+            UploadImageResponse? payload = await res.Content.ReadFromJsonAsync<UploadImageResponse>();
+            return payload?.Url;
+        }
+        catch
+        {
+            _error = "Ошибка загрузки файла.";
+            return null;
+        }
+    }
+
+    async Task AddWorkAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newWorkUrl))
+        {
+            _error = "Выберите или загрузите фото работы.";
+            return;
+        }
+
+        _addingWork = true;
+        _error = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "specialists/me/portfolio/works",
+                new AddPortfolioWorkDto
+                {
+                    ImageUrl = _newWorkUrl.Trim(),
+                    Title = string.IsNullOrWhiteSpace(_newWorkTitle) ? null : _newWorkTitle.Trim(),
+                });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось добавить работу.";
+                return;
+            }
+
+            _newWorkTitle = "";
+            _newWorkUrl = "";
+            await LoadAsync();
+            _saved = true;
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _addingWork = false;
+        }
+    }
+
+    async Task DeleteWorkAsync(PortfolioWorkDto work)
+    {
+        _deletingId = work.Id;
+        _error = null;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.DeleteAsync($"specialists/me/portfolio/works/{work.Id:D}");
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = "Не удалось удалить работу.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _deletingId = null;
+        }
+    }
+
+    sealed class UploadImageResponse
+    {
+        public string? Url { get; set; }
+    }
+
+}

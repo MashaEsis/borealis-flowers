@@ -10,6 +10,8 @@ public class SpecialistDto
     public string Specialization { get; set; }
 
     public string City { get; set; }
+    public string StyleDescription { get; set; } = "";
+    public List<string> PortfolioPreview { get; set; } = [];
 }
 
 public class SpecialistUpdateVM

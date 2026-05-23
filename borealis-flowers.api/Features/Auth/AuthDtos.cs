@@ -31,6 +31,10 @@ public sealed class UserMeDto
     public bool IsAdmin { get; set; }
     public bool IsSpecialist { get; set; }
     public Guid? SpecialistId { get; set; }
+    public double WalletBalance { get; set; }
+    public int LoyaltyProgress { get; set; }
+    public int LoyaltyTarget { get; set; } = 5;
+    public bool NextOrderDiscount { get; set; }
 }
 
 public sealed class UpdateProfileRequest

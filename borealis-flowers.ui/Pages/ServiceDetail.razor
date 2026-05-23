@@ -2,6 +2,7 @@
 @inject BackendApiClient Api
 @inject AppSessionService Session
 @inject NavigationManager Nav
+@using borealis_flowers.ui.Helpers
 
 <section class="card-panel">
     @if (_error is not null)
@@ -24,6 +25,17 @@
             <div>
                 <p class="muted-small">@_svc.SpecializationName</p>
                 <h1 style="margin-top:.35rem;">@_svc.Name</h1>
+                @if (_svc.SpecialistId is Guid floristId && !string.IsNullOrWhiteSpace(_svc.SpecialistName))
+                {
+                    <p class="muted-small" style="margin:.35rem 0 .5rem;">
+                        Флорист:
+                        <NavLink class="link-accent" href="@($"/florists/{floristId:D}/portfolio")">@_svc.SpecialistName</NavLink>
+                    </p>
+                }
+                else
+                {
+                    <p class="muted-small" style="margin:.35rem 0 .5rem;color:#a66;">Флорист для этого букета пока не назначен.</p>
+                }
                 <p style="font-size:1.15rem;margin:.75rem 0;">
                     <strong>@_svc.Price.ToString("N0")</strong> ₽
                     @if (_svc.EstimatedTime is int m)
@@ -47,23 +59,66 @@
                     </p>
                 }
 
-                @if (_ordered is Guid oid)
+                @if (_ordered)
                 {
-                    <div class="notice-banner" style="margin-top:1rem;">Заказ создан: <strong>@oid</strong>. Следите в «Мои заказы».</div>
+                    <div class="notice-banner" style="margin-top:1rem;">
+                        Заказ оформлен и передан флористу @_svc.SpecialistName.
+                        <NavLink class="link-accent" href="/cabinet/client">Открыть «Мои заказы»</NavLink>
+                    </div>
                 }
                 else if (_showConfirm && Session.IsClient)
                 {
                     <div class="card-panel" style="margin-top:1rem;background:rgba(0,0,0,.02);">
-                        <h2 style="margin-top:0;font-size:1rem;">Подтверждение</h2>
-                        <p class="muted-small">@_svc.Name — @_svc.Price.ToString("N0") ₽</p>
+                        <h2 style="margin-top:0;font-size:1rem;">Оформление заказа</h2>
+                        <p class="muted-small">@_svc.Name — @_svc.Price.ToString("N0") ₽ · флорист @_svc.SpecialistName</p>
+                        @if (_estimatedCharge is double charge)
+                        {
+                            <p class="muted-small">
+                                К списанию при принятии флористом: <strong>@charge.ToString("N0") ₽</strong>
+                                · на счёте: @(_walletBalance?.ToString("N0") ?? "—") ₽
+                            </p>
+                        }
+
+                        @if (_insufficientFunds)
+                        {
+                            <div class="notice-banner" style="margin:.75rem 0;">
+                                Недостаточно средств на счёте. Пополните баланс в
+                                <NavLink class="link-accent" href="/profile">профиле</NavLink>.
+                            </div>
+                        }
+
                         <div class="field">
-                            <label>Комментарий (необязательно)</label>
-                            <textarea @bind="_comment" rows="3" placeholder="Адрес, пожелания по оттенкам…"></textarea>
+                            <label>Телефон для связи</label>
+                            <input type="tel" @bind="_phone" placeholder="@StudioConstants.PhoneExample"/>
                         </div>
-                        <button class="btn btn-primary" type="button" disabled="@_busy" @onclick="SubmitOrderAsync">
+                        <div class="field">
+                            <label>Текст для открытки</label>
+                            <textarea @bind="_cardMessage" rows="2" placeholder="Поздравление или подпись на открытке…"></textarea>
+                        </div>
+                        <div class="field">
+                            <label>Адрес доставки</label>
+                            <textarea @bind="_deliveryAddress" rows="2" placeholder="Улица, дом, подъезд…"></textarea>
+                        </div>
+                        <div class="field">
+                            <label>Точка на карте</label>
+                            <DeliveryMapPicker Latitude="@_lat" Longitude="@_lng"
+                                               LocationChanged="OnMapLocationChangedAsync"
+                                               AddressResolved="OnAddressResolvedAsync"/>
+                        </div>
+                        <div class="field">
+                            <label>Комментарий к заказу (необязательно)</label>
+                            <textarea @bind="_comment" rows="2" placeholder="Пожелания по оттенкам, время доставки…"></textarea>
+                        </div>
+                        <button class="btn btn-primary" type="button" disabled="@(_busy || _insufficientFunds)" @onclick="SubmitOrderAsync">
                             @(_busy ? "Отправка…" : "Подтвердить заказ")
                         </button>
                     </div>
+                }
+                else if (_svc.SpecialistId is null)
+                {
+                    <button class="btn btn-ghost" style="margin-top:1.25rem;" type="button" disabled>
+                        Заказ временно недоступен
+                    </button>
                 }
                 else
                 {
@@ -91,12 +146,30 @@
 
     string _comment = "";
 
-    Guid? _ordered;
+    string _cardMessage = "";
+
+    string _deliveryAddress = "";
+
+    string _phone = "";
+
+    double _lat = StudioConstants.MapLatitude;
+
+    double _lng = StudioConstants.MapLongitude;
+
+    bool _ordered;
+
+    double? _walletBalance;
+
+    double? _estimatedCharge;
+
+    bool _insufficientFunds;
 
     protected override async Task OnParametersSetAsync()
     {
         _error = null;
         _svc = null;
+        _showConfirm = false;
+        _ordered = false;
         try
         {
             ServiceRowDto? dto = await Api.Http.GetFromJsonAsync<ServiceRowDto>($"services/{Id:D}");
@@ -117,19 +190,87 @@
             return;
         }
 
+        _phone = Session.CurrentUser?.Phone ?? "";
+        UpdateBalanceCheck();
         _showConfirm = true;
+    }
+
+    void UpdateBalanceCheck()
+    {
+        if (_svc is null)
+            return;
+
+        bool discount = Session.CurrentUser?.NextOrderDiscount ?? false;
+        _walletBalance = Session.CurrentUser?.WalletBalance;
+        _estimatedCharge = EstimateCharge(_svc.Price, discount);
+        _insufficientFunds = _walletBalance is double bal && _estimatedCharge is double charge && bal + 0.001 < charge;
+    }
+
+    static double EstimateCharge(double price, bool nextDiscount) =>
+        nextDiscount ? Math.Round(price * 0.85, 2) : price;
+
+    Task OnMapLocationChangedAsync((double Lat, double Lng) point)
+    {
+        _lat = point.Lat;
+        _lng = point.Lng;
+        return Task.CompletedTask;
+    }
+
+    Task OnAddressResolvedAsync(string? address)
+    {
+        if (!string.IsNullOrWhiteSpace(address))
+            _deliveryAddress = address;
+        return Task.CompletedTask;
     }
 
     async Task SubmitOrderAsync()
     {
         if (_svc is null)
             return;
+
+        if (string.IsNullOrWhiteSpace(_deliveryAddress))
+        {
+            _error = "Укажите адрес доставки или выберите точку на карте.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_phone))
+        {
+            _error = "Укажите телефон для связи.";
+            return;
+        }
+
+        UpdateBalanceCheck();
+        if (_insufficientFunds)
+        {
+            _error = "Недостаточно средств на счёте. Пополните баланс в профиле.";
+            return;
+        }
+
         _busy = true;
+        _error = null;
         try
         {
             HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
                 "orders/bouquet",
-                new PlaceBouquetRequestDto { ServiceId = _svc.Id, Comment = _comment.Trim() });
+                new PlaceBouquetRequestDto
+                {
+                    ServiceId = _svc.Id,
+                    Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim(),
+                    CardMessage = string.IsNullOrWhiteSpace(_cardMessage) ? null : _cardMessage.Trim(),
+                    DeliveryAddress = _deliveryAddress.Trim(),
+                    DeliveryLatitude = _lat,
+                    DeliveryLongitude = _lng,
+                    Phone = _phone.Trim(),
+                });
+
+            if (res.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                _error = await res.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(_error))
+                    _error = "Проверьте данные заказа.";
+                return;
+            }
 
             if (!res.IsSuccessStatusCode)
             {
@@ -137,8 +278,7 @@
                 return;
             }
 
-            Guid? id = await res.Content.ReadFromJsonAsync<Guid>();
-            _ordered = id;
+            _ordered = true;
             _showConfirm = false;
         }
         finally

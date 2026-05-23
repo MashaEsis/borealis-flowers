@@ -66,6 +66,9 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Property<string>("VisitorId")
                         .HasColumnType("TEXT");
 
+                    b.Property<double>("WalletBalance")
+                        .HasColumnType("REAL");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SpecialistId");
@@ -204,6 +207,36 @@ namespace borealis_flowers.api.Data.Migrations
                     b.ToTable("HistoryTimeslots");
                 });
 
+            modelBuilder.Entity("borealis_flowers.api.Data.Models.PaymentCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastFour")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("PaymentCards");
+                });
+
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Request", b =>
                 {
                     b.Property<Guid>("Id")
@@ -214,6 +247,12 @@ namespace borealis_flowers.api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<double?>("Budget")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("CardMessage")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("ChargedAmount")
                         .HasColumnType("REAL");
 
                     b.Property<DateTime?>("ClientConfirmedAtUtc")
@@ -228,11 +267,26 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CustomerPhoneSnapshot")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeliveryAddress")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("DeliveryLatitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("DeliveryLongitude")
+                        .HasColumnType("REAL");
+
                     b.Property<DateTime?>("DepartureAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("DiscountPercent")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("EventStartsAtUtc")
                         .HasColumnType("TEXT");
@@ -249,12 +303,18 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Property<string>("FloristMaterials")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsPaid")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("OrderKind")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("OrderStatus")
                         .HasColumnType("INTEGER")
                         .HasColumnName("State");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("TEXT");
 
                     b.Property<double?>("QuoteTotal")
                         .HasColumnType("REAL");
@@ -319,10 +379,15 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Property<double>("Price")
                         .HasColumnType("REAL");
 
+                    b.Property<Guid?>("SpecialistId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("SpecializationId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SpecialistId");
 
                     b.HasIndex("SpecializationId");
 
@@ -435,6 +500,9 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Property<Guid>("SpecializationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("StyleDescription")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("SpecializationId");
@@ -482,6 +550,35 @@ namespace borealis_flowers.api.Data.Migrations
                             IsActive = true,
                             SpecializationId = new Guid("d78d53c1-f24a-4d27-86a4-54adaebb3ae5")
                         });
+                });
+
+            modelBuilder.Entity("borealis_flowers.api.Data.Models.SpecialistPortfolioWork", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SpecialistId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpecialistId");
+
+                    b.ToTable("SpecialistPortfolioWorks");
                 });
 
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Specialization", b =>
@@ -602,6 +699,17 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Navigation("Timeslot");
                 });
 
+            modelBuilder.Entity("borealis_flowers.api.Data.Models.PaymentCard", b =>
+                {
+                    b.HasOne("borealis_flowers.api.Data.Models.Customer", "Customer")
+                        .WithMany("PaymentCards")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Request", b =>
                 {
                     b.HasOne("borealis_flowers.api.Data.Models.Customer", "Customer")
@@ -626,11 +734,18 @@ namespace borealis_flowers.api.Data.Migrations
 
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Service", b =>
                 {
+                    b.HasOne("borealis_flowers.api.Data.Models.Specialist", "Specialist")
+                        .WithMany()
+                        .HasForeignKey("SpecialistId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("borealis_flowers.api.Data.Models.Specialization", "Specialization")
                         .WithMany()
                         .HasForeignKey("SpecializationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Specialist");
 
                     b.Navigation("Specialization");
                 });
@@ -665,6 +780,17 @@ namespace borealis_flowers.api.Data.Migrations
                     b.Navigation("Specialization");
                 });
 
+            modelBuilder.Entity("borealis_flowers.api.Data.Models.SpecialistPortfolioWork", b =>
+                {
+                    b.HasOne("borealis_flowers.api.Data.Models.Specialist", "Specialist")
+                        .WithMany("PortfolioWorks")
+                        .HasForeignKey("SpecialistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Specialist");
+                });
+
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Timeslot", b =>
                 {
                     b.HasOne("borealis_flowers.api.Data.Models.Customer", "Customer")
@@ -684,6 +810,8 @@ namespace borealis_flowers.api.Data.Migrations
 
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Customer", b =>
                 {
+                    b.Navigation("PaymentCards");
+
                     b.Navigation("Timeslots");
                 });
 
@@ -695,6 +823,8 @@ namespace borealis_flowers.api.Data.Migrations
             modelBuilder.Entity("borealis_flowers.api.Data.Models.Specialist", b =>
                 {
                     b.Navigation("DateSchedules");
+
+                    b.Navigation("PortfolioWorks");
                 });
 #pragma warning restore 612, 618
         }

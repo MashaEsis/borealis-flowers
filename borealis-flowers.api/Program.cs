@@ -6,6 +6,7 @@ using borealis_flowers.api.Features.Auth;
 using borealis_flowers.api.Features.Customers;
 using borealis_flowers.api.Features.Directory;
 using borealis_flowers.api.Features.FloristApplications;
+using borealis_flowers.api.Features.Home;
 using borealis_flowers.api.Features.HistoryTimeslots;
 using borealis_flowers.api.Features.Images;
 using borealis_flowers.api.Features.Orders;
@@ -16,6 +17,7 @@ using borealis_flowers.api.Features.Specialists;
 using borealis_flowers.api.Features.Specializations;
 using borealis_flowers.api.Features.Statistics;
 using borealis_flowers.api.Features.Timeslots;
+using borealis_flowers.api.Features.Wallet;
 using borealis_flowers.api.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.Sqlite;
@@ -97,10 +99,31 @@ using (IServiceScope scope = app.Services.CreateScope())
 {
     DataContext db = scope.ServiceProvider.GetRequiredService<DataContext>();
     LegacySqliteMigrationBaseline.StampInitialMigrationIfLegacyDatabase(db);
+    try
+    {
+        db.Database.ExecuteSqlRaw("""DELETE FROM "__EFMigrationsLock" WHERE "Id" = 1;""");
+    }
+    catch
+    {
+        // lock table may not exist yet
+    }
+
     db.Database.Migrate();
     ServiceCatalogSchemaPatcher.Apply(db);
+    PortfolioSchemaPatcher.Apply(db);
+    BouquetOrderSchemaPatcher.Apply(db);
+    WalletSchemaPatcher.Apply(db);
     await EnsureSeedAdminAsync(db);
-    await BouquetCatalogSeeder.ApplyAsync(db, app.Environment.ContentRootPath);
+    await DatabaseIntegrityPatcher.ApplyAsync(db);
+    try
+    {
+        await BouquetCatalogSeeder.ApplyAsync(db, app.Environment.ContentRootPath);
+    }
+    catch (IOException ex)
+    {
+        app.Logger.LogWarning(ex, "Не удалось обновить фото каталога — файл занят другим процессом.");
+    }
+    await BouquetFloristSeeder.ApplyAsync(db);
 }
 
 app.UseMiddleware<CoreAdminProtectionMiddleware>();
@@ -140,10 +163,12 @@ app.StatisticsNewEndpointsRegistration();
 app.TimeslotsHistoryEndpointsRegistration();
 app.RequestsEndpointsRegistration();
 app.PublicEventsEndpointsRegistration();
+app.HomeEndpointsRegistration();
 
 app.AuthEndpointsRegistration();
 app.FloristApplicationsEndpointsRegistration();
 app.OrdersEndpointsRegistration();
+app.WalletEndpointsRegistration();
 app.StaffDirectoryEndpointsRegistration();
 app.AdminCatalogEndpointsRegistration();
 

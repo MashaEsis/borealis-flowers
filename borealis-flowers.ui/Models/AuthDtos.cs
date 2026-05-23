@@ -43,6 +43,14 @@ public sealed class UserMeDto
 
     [JsonPropertyName("specialistId")]
     public Guid? SpecialistId { get; set; }
+
+    public double WalletBalance { get; set; }
+
+    public int LoyaltyProgress { get; set; }
+
+    public int LoyaltyTarget { get; set; } = 5;
+
+    public bool NextOrderDiscount { get; set; }
 }
 
 public sealed class UpdateProfileRequestDto
@@ -107,6 +115,24 @@ public sealed class OrderRowDto
     public DateTime CreatedAt { get; set; }
 
     public string? Description { get; set; }
+
+    public string? CardMessage { get; set; }
+
+    public string? DeliveryAddress { get; set; }
+
+    public double? DeliveryLatitude { get; set; }
+
+    public double? DeliveryLongitude { get; set; }
+
+    public string? CustomerPhoneSnapshot { get; set; }
+
+    public double? ChargedAmount { get; set; }
+
+    public int DiscountPercent { get; set; }
+
+    public bool IsPaid { get; set; }
+
+    public DateTime? PaidAtUtc { get; set; }
 }
 
 public sealed class PlaceBouquetRequestDto
@@ -114,6 +140,16 @@ public sealed class PlaceBouquetRequestDto
     public Guid ServiceId { get; set; }
 
     public string? Comment { get; set; }
+
+    public string? CardMessage { get; set; }
+
+    public string DeliveryAddress { get; set; } = "";
+
+    public double DeliveryLatitude { get; set; }
+
+    public double DeliveryLongitude { get; set; }
+
+    public string? Phone { get; set; }
 }
 
 public sealed class PlaceEventRequestDto
@@ -230,6 +266,8 @@ public sealed class ServiceRowDto
     public string? ImageUrl { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
+    public Guid? SpecialistId { get; set; }
+    public string? SpecialistName { get; set; }
 }
 
 public sealed class ServiceEditDto
@@ -241,4 +279,38 @@ public sealed class ServiceEditDto
     public string? ImageUrl { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
+    public Guid? SpecialistId { get; set; }
+}
+
+public sealed class PortfolioWorkDto
+{
+    public Guid Id { get; set; }
+    public string ImageUrl { get; set; } = "";
+    public string? Title { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class PortfolioDetailDto
+{
+    public Guid Id { get; set; }
+    public string FullName { get; set; } = "";
+    public string ImgUrl { get; set; } = "";
+    public string City { get; set; } = "";
+    public string Specialization { get; set; } = "";
+    public string StyleDescription { get; set; } = "";
+    public List<PortfolioWorkDto> Works { get; set; } = [];
+}
+
+public sealed class UpdatePortfolioDto
+{
+    public string? FullName { get; set; }
+    public string? City { get; set; }
+    public string? StyleDescription { get; set; }
+    public string? ImgUrl { get; set; }
+}
+
+public sealed class AddPortfolioWorkDto
+{
+    public string ImageUrl { get; set; } = "";
+    public string? Title { get; set; }
 }

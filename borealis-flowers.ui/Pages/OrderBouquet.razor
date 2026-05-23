@@ -9,14 +9,9 @@
     @if (!Session.IsClient)
     {
         <div class="notice-banner">
-            Войдите как клиент, чтобы отправить заявку в базу.
+            Войдите как клиент, чтобы оформить заказ.
             <NavLink class="link-accent" href="@LoginHref">Перейти ко входу</NavLink>
         </div>
-    }
-    else if (_done is Guid gid)
-    {
-        <div class="notice-banner">Заявка создана. Номер: <strong>@gid</strong></div>
-        <p class="muted-small">Флорист будет назначен автоматически. Отслеживайте статус в личном кабинете.</p>
     }
     else if (_error is not null)
     {
@@ -33,8 +28,7 @@
     else
     {
         <p class="muted-small">
-            Выберите букет из каталога (или откройте
-            <NavLink class="link-accent" href="/services">страницу услуг</NavLink>).
+            Выберите букет — оформление с адресом на карте и данными для доставки проходит на странице букета.
         </p>
 
         <div class="field">
@@ -42,34 +36,32 @@
             <select @bind="_serviceIdString">
                 @foreach (ServiceRowDto s in _services)
                 {
-                    <option value="@s.Id.ToString("D")">@s.Name — @s.Price.ToString("N0") ₽</option>
+                    <option value="@s.Id.ToString("D")">
+                        @s.Name — @s.Price.ToString("N0") ₽
+                        @(string.IsNullOrWhiteSpace(s.SpecialistName) ? "" : $" · {s.SpecialistName}")
+                    </option>
                 }
             </select>
         </div>
 
-        <div class="field">
-            <label>Комментарий (необязательно)</label>
-            <textarea @bind="_comment" rows="4"
-                      placeholder="Пожелания по оттенкам, размеру, доставке…"></textarea>
-        </div>
+        @if (SelectedService() is ServiceRowDto selected)
+        {
+            <p class="muted-small" style="margin:.5rem 0 1rem;">
+                Флорист: @(string.IsNullOrWhiteSpace(selected.SpecialistName) ? "не назначен" : selected.SpecialistName)
+            </p>
+        }
 
-        <button class="btn btn-primary" type="button" disabled="@Busy" @onclick="SubmitAsync">
-            @(Busy ? "Отправляем…" : "Отправить заявку")
+        <button class="btn btn-primary" type="button" disabled="@(SelectedService()?.SpecialistId is null)" @onclick="GoToServiceAsync">
+            Перейти к оформлению
         </button>
     }
 </section>
 
 @code {
 
-    Guid? _done;
-
-    bool Busy;
-
     List<ServiceRowDto>? _services;
 
     string _serviceIdString = "";
-
-    string _comment = "";
 
     string? _error;
 
@@ -115,49 +107,22 @@
             _serviceIdString = _services[0].Id.ToString("D");
     }
 
-    async Task SubmitAsync()
+    ServiceRowDto? SelectedService()
     {
-        Busy = true;
-        _error = null;
-        try
+        if (!Guid.TryParse(_serviceIdString, out Guid id))
+            return null;
+        return _services?.FirstOrDefault(s => s.Id == id);
+    }
+
+    void GoToServiceAsync()
+    {
+        if (!Guid.TryParse(_serviceIdString, out Guid serviceId) || serviceId == Guid.Empty)
         {
-            if (!Guid.TryParse(_serviceIdString, out Guid serviceId) || serviceId == Guid.Empty)
-            {
-                _error = "Выберите букет.";
-                return;
-            }
-
-            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
-                "orders/bouquet",
-                new PlaceBouquetRequestDto
-                {
-                    ServiceId = serviceId,
-                    Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim(),
-                });
-
-            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                _error = "Услуга не найдена.";
-                return;
-            }
-
-            if (!res.IsSuccessStatusCode)
-            {
-                _error = "Не удалось создать заявку.";
-                return;
-            }
-
-            Guid? id = await res.Content.ReadFromJsonAsync<Guid>();
-            _done = id;
+            _error = "Выберите букет.";
+            return;
         }
-        catch
-        {
-            _error = "Ошибка сети.";
-        }
-        finally
-        {
-            Busy = false;
-        }
+
+        Nav.NavigateTo($"/services/{serviceId:D}");
     }
 
 }

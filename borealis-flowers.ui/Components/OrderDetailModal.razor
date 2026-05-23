@@ -1,0 +1,128 @@
+@if (Order is not null && Visible)
+{
+    <div class="modal-backdrop" @onclick="CloseAsync">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <div>
+                    <p class="muted-small" style="margin:0;">@(OrderCardFormatter.IsBouquet(Order) ? "Букет" : "Мероприятие")</p>
+                    <h2 style="margin:.25rem 0 0;font-size:1.15rem;">@OrderCardFormatter.Title(Order)</h2>
+                </div>
+                <button type="button" class="btn btn-ghost modal-close" @onclick="CloseAsync" aria-label="Закрыть">✕</button>
+            </div>
+
+            <p class="status-pill @OrderStateUi.CssClass(Order.OrderStatus)" style="display:inline-block;margin:.75rem 0;">@OrderStateUi.Russian(Order.OrderStatus, Order.OrderKind)</p>
+
+            <dl class="order-detail-list">
+                <div>
+                    <dt>Создан</dt>
+                    <dd>@OrderCardFormatter.FormatWhen(Order.CreatedAt)</dd>
+                </div>
+                @if (OrderCardFormatter.PriceLine(Order) is string price)
+                {
+                    <div>
+                        <dt>Сумма</dt>
+                        <dd>@price</dd>
+                    </div>
+                }
+                @if (OrderCardFormatter.IsBouquet(Order))
+                {
+                    @if (!string.IsNullOrWhiteSpace(Order.DeliveryAddress))
+                    {
+                        <div>
+                            <dt>Адрес доставки</dt>
+                            <dd>@Order.DeliveryAddress</dd>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Order.CustomerPhoneSnapshot))
+                    {
+                        <div>
+                            <dt>Телефон</dt>
+                            <dd>@Order.CustomerPhoneSnapshot</dd>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Order.CardMessage))
+                    {
+                        <div>
+                            <dt>Открытка</dt>
+                            <dd>@Order.CardMessage</dd>
+                        </div>
+                    }
+                }
+                else
+                {
+                    @if (Order.EventStartsAtUtc is DateTime eventAt)
+                    {
+                        <div>
+                            <dt>Дата мероприятия</dt>
+                            <dd>@OrderCardFormatter.FormatWhen(eventAt)</dd>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Order.Venue))
+                    {
+                        <div>
+                            <dt>Место</dt>
+                            <dd>@Order.Venue</dd>
+                        </div>
+                    }
+                    @if (Order.Budget is double budget)
+                    {
+                        <div>
+                            <dt>Бюджет</dt>
+                            <dd>@budget.ToString("N0") ₽</dd>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Order.WishNotes))
+                    {
+                        <div>
+                            <dt>Пожелания</dt>
+                            <dd>@Order.WishNotes</dd>
+                        </div>
+                    }
+                }
+                @if (Order.IsPaid && Order.ChargedAmount is double paid)
+                {
+                    <div>
+                        <dt>Оплачено</dt>
+                        <dd>@paid.ToString("N0") ₽@(Order.DiscountPercent > 0 ? $" (скидка {Order.DiscountPercent}%)" : "")</dd>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Order.Description))
+                {
+                    <div>
+                        <dt>Комментарий</dt>
+                        <dd>@Order.Description</dd>
+                    </div>
+                }
+                @if (Order.CompletedAtUtc is DateTime completedAt)
+                {
+                    <div>
+                        <dt>Завершён</dt>
+                        <dd>@OrderCardFormatter.FormatWhen(completedAt)</dd>
+                    </div>
+                }
+            </dl>
+
+            <h3 style="margin:1rem 0 .5rem;font-size:.95rem;">Этапы заказа</h3>
+            <ul class="order-timeline">
+                @foreach ((int _, string label, bool isDone) in OrderCardFormatter.StatusTimeline(Order))
+                {
+                    <li class="@(isDone ? "done" : "")">@label</li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public OrderRowDto? Order { get; set; }
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    Task CloseAsync() => OnClose.InvokeAsync();
+}

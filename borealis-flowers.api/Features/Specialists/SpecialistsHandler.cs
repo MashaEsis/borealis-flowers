@@ -11,19 +11,41 @@ public static class SpecialistsHandler
 {
     public static Func<DataContext, Task<List<SpecialistDto>>> GetSpecialists()
     {
-        return async (DataContext db) => await db.Specialists
-            .AsNoTracking()
-            .Where(s => s.IsActive)
-            .Include(x => x.Specialization)
-            .Select(s => new SpecialistDto
+        return async (DataContext db) =>
+        {
+            List<Specialist> specialists = await db.Specialists
+                .AsNoTracking()
+                .Where(s => s.IsActive)
+                .Include(x => x.Specialization)
+                .ToListAsync();
+
+            var ids = specialists.Select(s => s.Id).ToList();
+            var allWorks = await db.SpecialistPortfolioWorks.AsNoTracking()
+                .Where(w => ids.Contains(w.SpecialistId))
+                .OrderBy(w => w.SpecialistId)
+                .ThenBy(w => w.SortOrder)
+                .ThenBy(w => w.CreatedAt)
+                .Select(w => new { w.SpecialistId, w.ImageUrl })
+                .ToListAsync();
+
+            var previewMap = allWorks
+                .GroupBy(w => w.SpecialistId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.ImageUrl).Take(4).ToList());
+
+            return specialists.Select(s => new SpecialistDto
             {
                 Id = s.Id,
                 FullName = s.FullName,
                 ImgUrl = s.ImgUrl,
                 Address = s.Address ?? string.Empty,
                 City = s.City ?? string.Empty,
-                Specialization = s.Specialization.Name,
-            }).ToListAsync();
+                Specialization = s.Specialization?.Name ?? string.Empty,
+                StyleDescription = s.StyleDescription ?? string.Empty,
+                PortfolioPreview = previewMap.TryGetValue(s.Id, out List<string>? imgs) ? imgs : [],
+            }).ToList();
+        };
     }
 
     public static Func<SpecialistUpdateVM, DataContext, ClaimsPrincipal, Task<IResult>> UpdateSpecialist()

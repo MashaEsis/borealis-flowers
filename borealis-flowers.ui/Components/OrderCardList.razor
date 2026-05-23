@@ -1,0 +1,99 @@
+@foreach (OrderRowDto o in Orders)
+{
+    <article class="card-panel order-card">
+        <div class="order-card-head">
+            <div>
+                <p class="status-pill @OrderStateUi.CssClass(o.OrderStatus)">@OrderStateUi.Russian(o.OrderStatus, o.OrderKind)</p>
+                <h2 class="order-card-title">@OrderCardFormatter.Title(o)</h2>
+                <p class="muted-small order-card-meta">
+                    @OrderCardFormatter.FormatWhen(o.CreatedAt)
+                    @if (OrderCardFormatter.PriceLine(o) is string price)
+                    {
+                        @($" · {price}")
+                    }
+                </p>
+                <p class="muted-small order-card-line">@OrderCardFormatter.ShortLine(o)</p>
+                @if (o.IsPaid && o.ChargedAmount is double paid)
+                {
+                    <p class="muted-small order-card-line">
+                        Оплачено @paid.ToString("N0") ₽
+                        @if (o.DiscountPercent > 0)
+                        {
+                            @($" · скидка {o.DiscountPercent}%")
+                        }
+                    </p>
+                }
+                else if (OrderCardFormatter.IsBouquet(o) && o.OrderStatus is >= 1 and < 4)
+                {
+                    <p class="muted-small order-card-line">Оплата после принятия флористом</p>
+                }
+            </div>
+            <button type="button" class="order-menu-btn" title="Подробнее" @onclick="@(() => OnOpenDetail.InvokeAsync(o))">⋯</button>
+        </div>
+
+        @if (!Archive && o.OrderStatus == 8 && o.DepartureAtUtc is DateTime handedAt)
+        {
+            <p class="muted-small" style="margin:.45rem 0 0;">
+                Курьер передал заказ @handedAt.ToLocalTime():HH:mm. Подтвердите получение в течение 20 минут.
+            </p>
+        }
+
+        @if (!Archive)
+        {
+            <div class="order-card-actions">
+                @if (OrderStateUi.ClientCanCancel(o.OrderKind, o.OrderStatus))
+                {
+                    if (ConfirmCancelId == o.Id)
+                    {
+                        <span class="muted-small">Отменить?</span>
+                        <button type="button" class="btn btn-primary" style="font-size:.82rem;padding:.35rem .75rem;"
+                                disabled="@(BusyId == o.Id)" @onclick="@(() => OnCancel.InvokeAsync(o))">Да</button>
+                        <button type="button" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .75rem;"
+                                @onclick="OnDismissCancel">Нет</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-ghost" @onclick="@(() => OnRequestCancel.InvokeAsync(o))">Отменить</button>
+                    }
+                }
+
+                @if (OrderStateUi.ClientCanConfirmReceived(o.OrderStatus))
+                {
+                    <button type="button" class="btn btn-primary" disabled="@(BusyId == o.Id)"
+                            @onclick="@(() => OnConfirmReceived.InvokeAsync(o))">Подтвердить получение</button>
+                }
+            </div>
+        }
+    </article>
+}
+
+@code {
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<OrderRowDto> Orders { get; set; } = [];
+
+    [Parameter]
+    public bool Archive { get; set; }
+
+    [Parameter]
+    public Guid? ConfirmCancelId { get; set; }
+
+    [Parameter]
+    public Guid? BusyId { get; set; }
+
+    [Parameter]
+    public EventCallback<OrderRowDto> OnOpenDetail { get; set; }
+
+    [Parameter]
+    public EventCallback<OrderRowDto> OnRequestCancel { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismissCancel { get; set; }
+
+    [Parameter]
+    public EventCallback<OrderRowDto> OnCancel { get; set; }
+
+    [Parameter]
+    public EventCallback<OrderRowDto> OnConfirmReceived { get; set; }
+
+}

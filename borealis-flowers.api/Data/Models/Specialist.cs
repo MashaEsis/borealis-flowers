@@ -25,4 +25,9 @@ public class Specialist
     public string? City { get; set; }
     public bool IsActive { get; set; } = false;
 
+    /// <summary>Описание стиля / о себе для портфолио.</summary>
+    public string? StyleDescription { get; set; }
+
+    public List<SpecialistPortfolioWork> PortfolioWorks { get; set; } = [];
+
 }

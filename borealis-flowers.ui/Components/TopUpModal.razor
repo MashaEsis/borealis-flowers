@@ -1,0 +1,132 @@
+@if (Visible)
+{
+    <div class="modal-backdrop" @onclick="CloseAsync">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h2 style="margin:0;font-size:1.05rem;">Пополнить счёт</h2>
+                <button type="button" class="btn btn-ghost modal-close" @onclick="CloseAsync" aria-label="Закрыть">✕</button>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="notice-banner" style="margin:.75rem 0;">@_error</div>
+            }
+
+            <div class="field">
+                <label>Сумма</label>
+                <input type="number" min="1" step="10" @bind="_amount"/>
+            </div>
+
+            @if (Cards.Count > 0)
+            {
+                <div class="field">
+                    <label>Карта для списания</label>
+                    <div class="topup-card-list">
+                        @foreach (PaymentCardDto card in Cards)
+                        {
+                            <label class="topup-card-option @(_selectedId == card.Id ? "selected" : "")">
+                                <input type="radio" name="topup-card" checked="@(_selectedId == card.Id)"
+                                       @onchange="@(() => _selectedId = card.Id)"/>
+                                <span>@card.Label ·••• @card.LastFour</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+            }
+
+            <button type="button" class="btn btn-ghost" style="margin-bottom:.75rem;" @onclick="RequestNewCard">
+                + Привязать новую карту
+            </button>
+
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" disabled="@(_busy || Cards.Count == 0)" @onclick="SubmitAsync">
+                    @(_busy ? "…" : "Пополнить")
+                </button>
+                <button type="button" class="btn btn-ghost" @onclick="CloseAsync">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<PaymentCardDto> Cards { get; set; } = [];
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnToppedUp { get; set; }
+
+    [Parameter]
+    public EventCallback OnLinkNewCard { get; set; }
+
+    [Inject]
+    BackendApiClient Api { get; set; } = null!;
+
+    double _amount = 100;
+
+    Guid _selectedId;
+
+    string? _error;
+
+    bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (Cards.Count > 0 && (_selectedId == Guid.Empty || Cards.All(c => c.Id != _selectedId)))
+            _selectedId = Cards[0].Id;
+    }
+
+    async Task SubmitAsync()
+    {
+        _error = null;
+        if (_amount <= 0)
+        {
+            _error = "Укажите сумму пополнения.";
+            return;
+        }
+
+        if (_selectedId == Guid.Empty)
+        {
+            _error = "Выберите карту или привяжите новую.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "wallet/topup",
+                new TopUpWalletDto { CardId = _selectedId, Amount = _amount });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = await res.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(_error))
+                    _error = "Не удалось пополнить счёт.";
+                return;
+            }
+
+            await OnToppedUp.InvokeAsync();
+            await CloseAsync();
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    Task RequestNewCard() => OnLinkNewCard.InvokeAsync();
+
+    Task CloseAsync() => OnClose.InvokeAsync();
+
+}

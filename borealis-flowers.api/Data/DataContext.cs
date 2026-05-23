@@ -81,6 +81,21 @@ namespace borealis_flowers.api.Data
                 .HasForeignKey(r => r.ServiceId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<Service>()
+                .HasOne(s => s.Specialist)
+                .WithMany()
+                .HasForeignKey(s => s.SpecialistId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<SpecialistPortfolioWork>()
+                .HasIndex(w => w.SpecialistId);
+
+            modelBuilder.Entity<PaymentCard>()
+                .HasOne(c => c.Customer)
+                .WithMany(c => c.PaymentCards)
+                .HasForeignKey(c => c.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             #region DateSchedule
             modelBuilder.Entity<DateSchedule>().HasData(
                 new DateSchedule { Id = Guid.Parse("20f92d7b-adec-49c3-88b0-374f45f3e728"), SpecialistId = Guid.Parse("dfe327cd-3efc-42f5-8dfc-f3bce55a49b7"), Date = new DateTime(2023, 7, 13), IsWorkingDay = true, IsAvailable = false },
@@ -101,5 +116,7 @@ namespace borealis_flowers.api.Data
         public DbSet<Request> Requests { get; set; }
         public DbSet<HistoryTimeslot> HistoryTimeslots { get; set; }
         public DbSet<FloristApplication> FloristApplications { get; set; }
+        public DbSet<SpecialistPortfolioWork> SpecialistPortfolioWorks { get; set; }
+        public DbSet<PaymentCard> PaymentCards { get; set; }
     }
 }

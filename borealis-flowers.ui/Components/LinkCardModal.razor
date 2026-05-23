@@ -1,0 +1,137 @@
+@if (Visible)
+{
+    <div class="modal-backdrop" @onclick="CloseAsync">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h2 style="margin:0;font-size:1.05rem;">Привязать карту</h2>
+                <button type="button" class="btn btn-ghost modal-close" @onclick="CloseAsync" aria-label="Закрыть">✕</button>
+            </div>
+            <p class="muted-small">Данные не сохраняются — это демо-привязка для пополнения счёта.</p>
+
+            @if (_error is not null)
+            {
+                <div class="notice-banner" style="margin:.75rem 0;">@_error</div>
+            }
+
+            <div class="field">
+                <label>Номер карты</label>
+                <input type="text" inputmode="numeric" maxlength="19" @bind="_cardNumber" placeholder="0000 0000 0000 0000"/>
+            </div>
+            <div class="profile-fields" style="margin-bottom:.75rem;">
+                <div class="field">
+                    <label>Срок действия</label>
+                    <input type="text" maxlength="5" @bind="_expiry" placeholder="MM/YY"/>
+                </div>
+                <div class="field">
+                    <label>CVV</label>
+                    <input type="password" inputmode="numeric" maxlength="4" @bind="_cvv" placeholder="•••"/>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SubmitAsync">
+                    @(_busy ? "…" : "Привязать")
+                </button>
+                <button type="button" class="btn btn-ghost" @onclick="CloseAsync">Отмена</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnLinked { get; set; }
+
+    [Inject]
+    BackendApiClient Api { get; set; } = null!;
+
+    string _cardNumber = "";
+
+    string _expiry = "";
+
+    string _cvv = "";
+
+    string? _error;
+
+    bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        if (!Visible)
+            return;
+
+        _cardNumber = "";
+        _expiry = "";
+        _cvv = "";
+        _error = null;
+    }
+
+    async Task SubmitAsync()
+    {
+        _error = null;
+        string digits = new(_cardNumber.Where(char.IsDigit).ToArray());
+        if (digits.Length < 13 || digits.Length > 19)
+        {
+            _error = "Введите корректный номер карты.";
+            return;
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(_expiry.Trim(), @"^\d{2}/\d{2}$"))
+        {
+            _error = "Срок действия в формате MM/YY.";
+            return;
+        }
+
+        if (_cvv.Length is < 3 or > 4)
+        {
+            _error = "Введите CVV (3–4 цифры).";
+            return;
+        }
+
+        string lastFour = digits[^4..];
+        string label = digits[0] switch
+        {
+            '4' => "Visa",
+            '5' => "Mastercard",
+            '2' => "Mir",
+            _ => "Карта",
+        };
+
+        _busy = true;
+        try
+        {
+            HttpResponseMessage res = await Api.Http.PostAsJsonAsync(
+                "wallet/cards",
+                new AddPaymentCardDto { Label = label, LastFour = lastFour });
+
+            if (!res.IsSuccessStatusCode)
+            {
+                _error = await res.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(_error))
+                    _error = "Не удалось привязать карту.";
+                return;
+            }
+
+            await OnLinked.InvokeAsync();
+            await CloseAsync();
+        }
+        catch
+        {
+            _error = "Ошибка сети.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    Task CloseAsync() => OnClose.InvokeAsync();
+
+}

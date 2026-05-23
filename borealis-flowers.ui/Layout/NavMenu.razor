@@ -1,53 +1,118 @@
-﻿@inject AppSessionService App
+@inject AppSessionService App
 @inject BrowserStorageService Browser
 @inject NavigationManager Nav
 
 <nav class="sidebar-nav">
-    <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All">Главная</NavLink>
-    <NavLink class="sidebar-link" href="/services" Match="NavLinkMatch.Prefix">Каталог букетов</NavLink>
+    <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All">
+        <NavIcon Name="home"/>
+        <span>Главная</span>
+    </NavLink>
+    <NavLink class="sidebar-link" href="/services" Match="NavLinkMatch.Prefix">
+        <NavIcon Name="catalog"/>
+        <span>Каталог букетов</span>
+    </NavLink>
 
     @if (App.Role is StudioRole.Client or StudioRole.Visitor)
     {
-        <NavLink class="sidebar-link" href="/events" Match="NavLinkMatch.All">Мероприятия</NavLink>
+        <NavLink class="sidebar-link" href="/events" Match="NavLinkMatch.All">
+            <NavIcon Name="events"/>
+            <span>Мероприятия</span>
+        </NavLink>
     }
 
     @if (App.Role is StudioRole.Client)
     {
-        <NavLink class="sidebar-link" href="/florists" Match="NavLinkMatch.Prefix">Флористы</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/client" Match="NavLinkMatch.All">Мои заказы</NavLink>
-        <NavLink class="sidebar-link" href="/apply/florist" Match="NavLinkMatch.All">Стать флористом</NavLink>
+        <NavLink class="sidebar-link" href="/florists" Match="NavLinkMatch.Prefix">
+            <NavIcon Name="florists"/>
+            <span>Флористы</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/client" Match="NavLinkMatch.All">
+            <NavIcon Name="orders"/>
+            <span>Мои заказы</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/apply/florist" Match="NavLinkMatch.All">
+            <NavIcon Name="apply"/>
+            <span>Стать флористом</span>
+        </NavLink>
     }
 
     @if (App.Role is StudioRole.Florist && !App.IsAdmin)
     {
-        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">Мои заказы</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">Мои мероприятия</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/customers" Match="NavLinkMatch.All">Клиенты</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">
+            <NavIcon Name="orders"/>
+            <span>Мои заказы</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">
+            <NavIcon Name="events"/>
+            <span>Мои мероприятия</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/portfolio" Match="NavLinkMatch.All">
+            <NavIcon Name="portfolio"/>
+            <span>Моё портфолио</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/customers" Match="NavLinkMatch.All">
+            <NavIcon Name="clients"/>
+            <span>Клиенты</span>
+        </NavLink>
     }
 
     @if (App.Role is StudioRole.Admin)
     {
-        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">Мои заказы</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">Мои мероприятия</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin/users" Match="NavLinkMatch.All">Пользователи</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin/florists" Match="NavLinkMatch.All">Флористы</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin/applications" Match="NavLinkMatch.All">Заявки флористов</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin/services" Match="NavLinkMatch.All">Управление каталогом</NavLink>
-        <NavLink class="sidebar-link" href="/cabinet/admin" Match="NavLinkMatch.All">Все заказы</NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist" Match="NavLinkMatch.All">
+            <NavIcon Name="orders"/>
+            <span>Мои заказы</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/florist/events" Match="NavLinkMatch.All">
+            <NavIcon Name="events"/>
+            <span>Мои мероприятия</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/users" Match="NavLinkMatch.All">
+            <NavIcon Name="users"/>
+            <span>Пользователи</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/florists" Match="NavLinkMatch.All">
+            <NavIcon Name="florists"/>
+            <span>Флористы</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/applications" Match="NavLinkMatch.All">
+            <NavIcon Name="applications"/>
+            <span>Заявки флористов</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin/services" Match="NavLinkMatch.All">
+            <NavIcon Name="settings"/>
+            <span>Управление каталогом</span>
+        </NavLink>
+        <NavLink class="sidebar-link" href="/cabinet/admin" Match="NavLinkMatch.All">
+            <NavIcon Name="all-orders"/>
+            <span>Все заказы</span>
+        </NavLink>
     }
 
     @if (!App.IsVisitor)
     {
-        <NavLink class="sidebar-link" href="/profile" Match="NavLinkMatch.All">Профиль</NavLink>
+        <NavLink class="sidebar-link" href="/profile" Match="NavLinkMatch.All">
+            <NavIcon Name="profile"/>
+            <span>Профиль</span>
+        </NavLink>
     }
 
     @if (App.IsVisitor)
     {
-        <NavLink class="sidebar-link sidebar-link-accent" href="/login">Войти</NavLink>
+        <NavLink class="sidebar-link sidebar-link-accent" href="/login">
+            <NavIcon Name="login"/>
+            <span>Войти</span>
+        </NavLink>
     }
     else
     {
-        <button type="button" class="sidebar-link sidebar-link-button" @onclick="SignOutAsync">Выйти</button>
+        <button type="button" class="sidebar-link sidebar-link-button" @onclick="SignOutAsync">
+            <NavIcon Name="logout"/>
+            <span>Выйти</span>
+        </button>
+        @if (App.IsClient)
+        {
+            <SidebarWallet/>
+        }
     }
 </nav>
 

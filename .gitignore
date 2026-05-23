@@ -16,3 +16,5 @@ appsettings.Development.json
 .home/
 .nuget/
 .tmp/
+borealis-flowers.ui/wwwroot/images/florists/
+

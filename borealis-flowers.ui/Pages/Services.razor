@@ -31,6 +31,10 @@ else
                 <div class="product-card-body">
                     <p class="muted-small" style="margin:0;">@s.SpecializationName</p>
                     <h2 style="margin:.35rem 0;font-size:1.05rem;">@s.Name</h2>
+                    @if (!string.IsNullOrWhiteSpace(s.SpecialistName))
+                    {
+                        <p class="muted-small" style="margin:0 0 .25rem;">Флорист: @s.SpecialistName</p>
+                    }
                     <p class="muted-small" style="margin:.25rem 0 .6rem;">@preview</p>
                     <p class="muted-small">
                         <strong>@s.Price.ToString("N0")</strong> ₽

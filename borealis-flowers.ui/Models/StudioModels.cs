@@ -55,6 +55,7 @@ public sealed class FloristVm
     public string City { get; init; } = "";
     public string Specialization { get; init; } = "";
     public string StyleDescription { get; init; } = "";
+    public IReadOnlyList<string> PortfolioPreview { get; init; } = [];
 }
 
 public sealed class WarehouseItemDto

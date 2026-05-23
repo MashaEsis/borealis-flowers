@@ -10,9 +10,6 @@ public sealed class FloristCatalogService
 
     public IReadOnlyList<FloristVm> Cached => _cache;
 
-    /// <summary>
-    /// Загружает флористов с API borealis-flowers.api или локальный демо-список.
-    /// </summary>
     public async Task LoadFloristsAsync(HttpClient httpClient, BackendSettings backend)
     {
         _cache.Clear();
@@ -34,7 +31,7 @@ public sealed class FloristCatalogService
                          {
                              Id = id1, FullName = "Александра Серова", ImgUrl =
                                  "https://images.unsplash.com/photo-1455659817273-f96807779a38?w=400&auto=format&fit=crop&q=70",
-                             City = "Казань",
+                             City = "Гомель",
                              Specialization = "Студийные композиции",
                              StyleDescription = "Нежный минимализм, сезонные текстуры и спокойная палитра."
                          },
@@ -42,7 +39,7 @@ public sealed class FloristCatalogService
                          {
                              Id = id2, FullName = "Марк Тюльпанов", ImgUrl =
                                  "https://images.unsplash.com/photo-1466692476869-aefc1fc43f73?w=400&auto=format&fit=crop&q=70",
-                             City = "Казань",
+                             City = "Гомель",
                              Specialization = "Мероприятия под ключ",
                              StyleDescription = "Крупные инсталляции, свадебный декор и корпоративное оформление."
                          }
@@ -74,6 +71,10 @@ public sealed class FloristCatalogService
 
             foreach (SpecialistApiDto row in apiList)
             {
+                string style = string.IsNullOrWhiteSpace(row.StyleDescription)
+                    ? DescribeStyle(row.Specialization)
+                    : row.StyleDescription.Trim();
+
                 _cache.Add(new FloristVm
                 {
                     Id = row.Id,
@@ -83,7 +84,8 @@ public sealed class FloristCatalogService
                         : row.ImgUrl.Trim(),
                     City = row.City ?? "",
                     Specialization = row.Specialization ?? "",
-                    StyleDescription = DescribeStyle(row.Specialization),
+                    StyleDescription = style,
+                    PortfolioPreview = row.PortfolioPreview ?? [],
                 });
             }
         }
@@ -98,6 +100,14 @@ public sealed class FloristCatalogService
 
     public static IEnumerable<string> BuildPortfolioPreview(Guid floristId, int count = 4) =>
         PortfolioSeeds.Take(count).Select(seed => PortfolioUrl(floristId, seed));
+
+    public static IEnumerable<string> PreviewFor(FloristVm florist, int count = 4)
+    {
+        if (florist.PortfolioPreview.Count > 0)
+            return florist.PortfolioPreview.Take(count);
+
+        return BuildPortfolioPreview(florist.Id, count);
+    }
 
     static readonly string[] PortfolioSeeds =
         ["peony-b", "orchid-z", "wedding-alt", "table-set", "arch-fl", "hand-tie-q"];
@@ -130,5 +140,9 @@ public sealed class FloristCatalogService
         [JsonPropertyName("city")] public string? City { get; init; }
 
         [JsonPropertyName("specialization")] public string? Specialization { get; init; }
+
+        [JsonPropertyName("styleDescription")] public string? StyleDescription { get; init; }
+
+        [JsonPropertyName("portfolioPreview")] public List<string>? PortfolioPreview { get; init; }
     };
 }

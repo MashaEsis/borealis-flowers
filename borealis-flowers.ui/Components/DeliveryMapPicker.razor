@@ -1,0 +1,77 @@
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+@using borealis_flowers.ui.Helpers
+
+<div class="delivery-map-wrap">
+    <p class="muted-small" style="margin:0 0 .45rem;">Нажмите на карту или перетащите маркер, чтобы указать точку доставки.</p>
+    <div id="@_mapId" class="delivery-map"></div>
+    @if (_geocoding)
+    {
+        <p class="muted-small" style="margin:.35rem 0 0;">Определяем адрес…</p>
+    }
+</div>
+
+@code {
+    const double DefaultLat = StudioConstants.MapLatitude;
+    const double DefaultLng = StudioConstants.MapLongitude;
+
+    [Parameter]
+    public double Latitude { get; set; } = DefaultLat;
+
+    [Parameter]
+    public double Longitude { get; set; } = DefaultLng;
+
+    [Parameter]
+    public EventCallback<(double Lat, double Lng)> LocationChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> AddressResolved { get; set; }
+
+    readonly string _mapId = $"delivery-map-{Guid.NewGuid():N}";
+    DotNetObjectReference<DeliveryMapPicker>? _dotNetRef;
+    bool _initialized;
+    bool _geocoding;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialized)
+            return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await Js.InvokeVoidAsync(
+            "borealisDeliveryMap.init",
+            _mapId,
+            Latitude,
+            Longitude,
+            _dotNetRef);
+        _initialized = true;
+    }
+
+    [JSInvokable]
+    public async Task OnLocationChanged(double lat, double lng)
+    {
+        Latitude = lat;
+        Longitude = lng;
+        await LocationChanged.InvokeAsync((lat, lng));
+
+        if (AddressResolved.HasDelegate)
+        {
+            _geocoding = true;
+            StateHasChanged();
+            string? address = await Js.InvokeAsync<string?>(
+                "borealisDeliveryMap.reverseGeocode",
+                lat,
+                lng);
+            _geocoding = false;
+            await AddressResolved.InvokeAsync(address);
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+            await Js.InvokeVoidAsync("borealisDeliveryMap.destroy", _mapId);
+        _dotNetRef?.Dispose();
+    }
+}

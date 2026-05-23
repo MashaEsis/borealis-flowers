@@ -1,68 +1,115 @@
 @page "/florists/{FloristGuid:guid}/portfolio"
-
+@inject BackendApiClient Api
 @inject FloristCatalogService FloristCatalogService
 @inject NavigationManager Navigation
 
-@if (_found is false)
+@if (_loading)
+{
+    <p class="muted-small card-panel">Загрузка…</p>
+}
+else if (_found is false)
 {
     <section class="card-panel muted-small">
         Мастер не найден.
         <div style="margin-top:12px;"><button type="button" class="btn btn-ghost" @onclick="@GoBack">К списку</button></div>
     </section>
 }
-else if (_found is true && _member is not null)
+else if (_portfolio is not null)
 {
     <section class="card-panel">
         <div class="two-column" style="align-items:center;">
             <div>
                 <p class="status-pill">Портфолио</p>
-                <h1 style="margin:.5rem 0 .25rem;">@_member.FullName</h1>
+                <h1 style="margin:.5rem 0 .25rem;">@_portfolio.FullName</h1>
                 <p class="muted-small" style="margin:0;line-height:1.5;">
-                    @(string.IsNullOrWhiteSpace(_member.City) ? "Город уточняется у флориста" : _member.City)
-                    · @(string.IsNullOrWhiteSpace(_member.Specialization) ? "Направление уточняется" : _member.Specialization)
+                    @(string.IsNullOrWhiteSpace(_portfolio.City) ? "Город уточняется у флориста" : _portfolio.City)
+                    · @(string.IsNullOrWhiteSpace(_portfolio.Specialization) ? "Направление уточняется" : _portfolio.Specialization)
                 </p>
-                @if (!string.IsNullOrWhiteSpace(_member.StyleDescription))
+                @if (!string.IsNullOrWhiteSpace(_portfolio.StyleDescription))
                 {
-                    <p class="muted-small" style="margin:.45rem 0 0;line-height:1.5;">@_member.StyleDescription</p>
+                    <p class="muted-small" style="margin:.45rem 0 0;line-height:1.5;">@_portfolio.StyleDescription</p>
                 }
                 <div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:.6rem;">
                     <NavLink class="btn btn-primary" href="/services" style="text-decoration:none;display:inline-flex;align-items:center;">Каталог букетов</NavLink>
                     <NavLink class="btn btn-soft" href="/florists" style="text-decoration:none;display:inline-flex;align-items:center;">В каталог</NavLink>
                 </div>
             </div>
-            <img class="fl-photo" src="@_member.ImgUrl" alt="" />
+            <img class="fl-photo" src="@PortraitUrl" alt="" />
         </div>
     </section>
 
     <section class="card-panel" style="margin-top:1rem;">
         <h2 style="margin-top:0;">Работы студии</h2>
-        <p class="muted-small">Подборочные образы только для интерфейса — подключите собственную медиатеку в API позже.</p>
-
-        <div class="fl-grid" style="margin-top:1.25rem;">
-            @foreach (string url in FloristCatalogService.BuildPortfolioPreview(FloristGuid, 5))
-            {
-                <figure style="margin:0;">
-                    <img class="fl-photo" src="@url" loading="lazy" alt="Работа" />
-                </figure>
-            }
-        </div>
+        @if (_portfolio.Works.Count == 0)
+        {
+            <p class="muted-small">Флорист ещё не добавил работы в портфолио.</p>
+        }
+        else
+        {
+            <div class="fl-grid" style="margin-top:1.25rem;">
+                @foreach (PortfolioWorkDto work in _portfolio.Works)
+                {
+                    <figure style="margin:0;">
+                        <img class="fl-photo" src="@work.ImageUrl" loading="lazy" alt="@(work.Title ?? "Работа")" />
+                        @if (!string.IsNullOrWhiteSpace(work.Title))
+                        {
+                            <figcaption class="muted-small" style="margin-top:.35rem;">@work.Title</figcaption>
+                        }
+                    </figure>
+                }
+            </div>
+        }
     </section>
 }
 
 @code {
-    FloristVm? _member;
+    PortfolioDetailDto? _portfolio;
     bool? _found;
+    bool _loading = true;
+
+    string PortraitUrl =>
+        string.IsNullOrWhiteSpace(_portfolio?.ImgUrl)
+            ? "https://picsum.photos/seed/portrait/480/560"
+            : _portfolio!.ImgUrl;
 
     [Parameter]
     public Guid FloristGuid { get; set; }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        FloristVm? hit = FloristCatalogService.Cached.FirstOrDefault(f => f.Id == FloristGuid);
-        _found = hit is not null;
-        _member = hit;
-
-        base.OnParametersSet();
+        _loading = true;
+        try
+        {
+            _portfolio = await Api.Http.GetFromJsonAsync<PortfolioDetailDto>($"specialists/{FloristGuid:D}/portfolio");
+            _found = _portfolio is not null;
+        }
+        catch
+        {
+            FloristVm? hit = FloristCatalogService.Cached.FirstOrDefault(f => f.Id == FloristGuid);
+            _found = hit is not null;
+            if (hit is not null)
+            {
+                _portfolio = new PortfolioDetailDto
+                {
+                    Id = hit.Id,
+                    FullName = hit.FullName,
+                    ImgUrl = hit.ImgUrl,
+                    City = hit.City,
+                    Specialization = hit.Specialization,
+                    StyleDescription = hit.StyleDescription,
+                    Works = hit.PortfolioPreview.Select((url, i) => new PortfolioWorkDto
+                    {
+                        Id = Guid.Empty,
+                        ImageUrl = url,
+                        SortOrder = i,
+                    }).ToList(),
+                };
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     void GoBack() =>

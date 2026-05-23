@@ -1,0 +1,91 @@
+@inject AppSessionService Session
+@inject BackendApiClient Api
+@implements IDisposable
+
+@if (Session.IsClient)
+{
+    <div class="sidebar-wallet">
+        @if (_loading)
+        {
+            <span class="muted-small">Счёт…</span>
+        }
+        else
+        {
+            <span class="sidebar-wallet-label">Баланс</span>
+            <strong class="sidebar-wallet-balance">@FormatBalance(_balance)</strong>
+            @if (_loyaltyProgress > 0 || _nextDiscount)
+            {
+                <span class="muted-small sidebar-wallet-meta">
+                    @_loyaltyProgress/5 · @(_nextDiscount ? "скидка 15%" : "до скидки")
+                </span>
+            }
+        }
+    </div>
+}
+
+@code {
+
+    double _balance;
+
+    int _loyaltyProgress;
+
+    bool _nextDiscount;
+
+    bool _loading = true;
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+        _ = LoadAsync();
+    }
+
+    void OnSessionChanged()
+    {
+        if (Session.IsClient)
+        {
+            _balance = Session.CurrentUser?.WalletBalance ?? 0;
+            _loyaltyProgress = Session.CurrentUser?.LoyaltyProgress ?? 0;
+            _nextDiscount = Session.CurrentUser?.NextOrderDiscount ?? false;
+            _ = InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+            _balance = 0;
+            _loading = true;
+        }
+    }
+
+    async Task LoadAsync()
+    {
+        if (!Session.IsClient)
+        {
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            WalletOverviewDto? wallet = await Api.Http.GetFromJsonAsync<WalletOverviewDto>("wallet");
+            if (wallet is not null)
+            {
+                _balance = wallet.Balance;
+                _loyaltyProgress = wallet.LoyaltyProgress;
+                _nextDiscount = wallet.NextOrderDiscount;
+            }
+        }
+        catch
+        {
+            _balance = Session.CurrentUser?.WalletBalance ?? 0;
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    static string FormatBalance(double amount) => $"{amount:N0} ₽";
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+
+}

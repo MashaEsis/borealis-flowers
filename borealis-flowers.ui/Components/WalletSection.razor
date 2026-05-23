@@ -1,0 +1,168 @@
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@inject BrowserStorageService Browser
+
+<section class="card-panel wallet-card">
+    <div class="wallet-head">
+        <div>
+            <p class="muted-small" style="margin:0;">Счёт</p>
+            <p class="wallet-balance">@FormatBalance(_balance)</p>
+        </div>
+        @if (_nextDiscount)
+        {
+            <span class="status-pill status-approved">−15% на след. букет</span>
+        }
+    </div>
+
+    <div class="loyalty-track">
+        <p class="muted-small" style="margin:0 0 .45rem;">
+            Лояльность: @_loyaltyProgress из @_loyaltyTarget букетов до скидки 15%
+        </p>
+        <div class="loyalty-dots">
+            @for (int i = 0; i < _loyaltyTarget; i++)
+            {
+                <span class="loyalty-dot @(i < _loyaltyProgress ? "filled" : "")"></span>
+            }
+        </div>
+    </div>
+
+    @if (_err is not null)
+    {
+        <div class="notice-banner" style="margin:.75rem 0;">@_err</div>
+    }
+
+    @if (_cards.Count > 0)
+    {
+        <ul class="card-list">
+            @foreach (PaymentCardDto card in _cards)
+            {
+                <li>
+                    <span>@card.Label ·••• @card.LastFour</span>
+                    <button type="button" class="btn btn-ghost" style="font-size:.78rem;padding:.2rem .45rem;"
+                            @onclick="@(() => RemoveCardAsync(card.Id))">✕</button>
+                </li>
+            }
+        </ul>
+    }
+
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.85rem;">
+        <button type="button" class="btn btn-primary" @onclick="OpenTopUp">Пополнить счёт</button>
+        <button type="button" class="btn btn-ghost" @onclick="OpenLinkCard">Привязать карту</button>
+    </div>
+</section>
+
+<LinkCardModal Visible="_linkOpen" OnClose="CloseLinkCard" OnLinked="ReloadAsync"/>
+<TopUpModal Visible="_topUpOpen"
+            Cards="_cards"
+            OnClose="CloseTopUp"
+            OnToppedUp="ReloadAsync"
+            OnLinkNewCard="OpenLinkFromTopUp"/>
+
+@code {
+
+    [Parameter]
+    public EventCallback OnWalletChanged { get; set; }
+
+    double _balance;
+
+    int _loyaltyProgress;
+
+    int _loyaltyTarget = 5;
+
+    bool _nextDiscount;
+
+    List<PaymentCardDto> _cards = [];
+
+    string? _err;
+
+    bool _linkOpen;
+
+    bool _topUpOpen;
+
+    bool _openTopUpAfterLink;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsClient)
+            await ReloadAsync();
+    }
+
+    public async Task ReloadAsync()
+    {
+        _err = null;
+        try
+        {
+            WalletOverviewDto? wallet = await Api.Http.GetFromJsonAsync<WalletOverviewDto>("wallet");
+            if (wallet is null)
+                return;
+
+            _balance = wallet.Balance;
+            _loyaltyProgress = wallet.LoyaltyProgress;
+            _loyaltyTarget = wallet.LoyaltyTarget;
+            _nextDiscount = wallet.NextOrderDiscount;
+            _cards = wallet.Cards;
+
+            UserMeDto? me = await Api.Http.GetFromJsonAsync<UserMeDto>("auth/me");
+            if (me is not null)
+                await Session.ApplyProfileAsync(me, Browser);
+
+            await OnWalletChanged.InvokeAsync();
+        }
+        catch
+        {
+            _err = "Не удалось загрузить кошелёк.";
+        }
+    }
+
+    void OpenLinkCard()
+    {
+        _linkOpen = true;
+        _topUpOpen = false;
+    }
+
+    void OpenTopUp()
+    {
+        if (_cards.Count == 0)
+        {
+            _linkOpen = true;
+            return;
+        }
+
+        _topUpOpen = true;
+    }
+
+    void OpenLinkFromTopUp()
+    {
+        _topUpOpen = false;
+        _openTopUpAfterLink = true;
+        _linkOpen = true;
+    }
+
+    void CloseLinkCard()
+    {
+        _linkOpen = false;
+        if (_openTopUpAfterLink && _cards.Count > 0)
+        {
+            _openTopUpAfterLink = false;
+            _topUpOpen = true;
+        }
+    }
+
+    void CloseTopUp() => _topUpOpen = false;
+
+    async Task RemoveCardAsync(Guid id)
+    {
+        try
+        {
+            await Api.Http.DeleteAsync($"wallet/cards/{id:D}");
+            await ReloadAsync();
+        }
+        catch
+        {
+            _err = "Не удалось удалить карту.";
+        }
+    }
+
+    static string FormatBalance(double amount) => $"{amount:N0} ₽";
+
+}

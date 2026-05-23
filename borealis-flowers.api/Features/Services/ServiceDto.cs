@@ -11,4 +11,6 @@ public class ServiceDto
     public string? ImageUrl { get; set; }
     public double Price { get; set; }
     public int? EstimatedTime { get; set; }
+    public Guid? SpecialistId { get; set; }
+    public string? SpecialistName { get; set; }
 }

@@ -1,114 +1,140 @@
 ﻿@page "/"
+@inject BackendApiClient Api
+@inject AppSessionService Session
+@using borealis_flowers.ui.Helpers
 
-<section class="card-panel">
-    <p class="status-pill">Студия Borealis Flowers · Казань</p>
-    <h1 class="tagline-heading" style="margin-top:.75rem;">
-        Нежные композиции и декор без визуального шума
-    </h1>
-    <p class="muted-small" style="max-width:60ch;">
-        Мы создаём букеты, оформляем свадьбы и корпоративы, проводим мастер-классы.
-        В основе — спокойная палитра, аккуратная геометрия и уважение к сезону цветов.
-    </p>
-</section>
-
-<section class="card-panel">
-    <h2 style="margin-top:0;">Ценности</h2>
-    <div class="two-column">
-        <div>
-            <h3 style="margin-top:0;">Сдержанная эстетика</h3>
-            <p class="muted-small">Без перегруза текстурами: воздух между ветками и чистая линия.</p>
+<section class="home-hero">
+    <div class="home-hero-copy">
+        <p class="status-pill">Borealis Flowers · @StudioConstants.City</p>
+        <h1 class="home-hero-title">Свежие букеты и декор для ваших событий</h1>
+        <p class="muted-small home-hero-lead">
+            Студия в Гомеле: доставка по городу, сезонные цветы и понятные сроки.
+        </p>
+        <div class="home-hero-actions">
+            <NavLink class="btn btn-primary" href="/services">Каталог букетов</NavLink>
+            @if (Session.IsClient)
+            {
+                <NavLink class="btn btn-soft" href="/profile">Счёт и профиль</NavLink>
+                <NavLink class="btn btn-ghost" href="/cabinet/client">Мои заказы</NavLink>
+            }
+            else if (Session.IsVisitor)
+            {
+                <NavLink class="btn btn-ghost" href="/login">Войти</NavLink>
+            }
         </div>
-        <div>
-            <h3 style="margin-top:0;">Ответственность</h3>
-            <p class="muted-small">Понятные сроки, прозрачное общение и аккуратная логистика.</p>
-        </div>
+    </div>
+    <div class="home-hero-visual">
+        <img src="https://images.unsplash.com/photo-1490759847152-847979872120?w=900&auto=format&fit=crop&q=80"
+             alt="Букет Borealis Flowers" loading="eager"/>
     </div>
 </section>
 
-<section class="card-panel">
-    <h2 style="margin-top:0;">Что делаем</h2>
-    <div class="home-services">
-        <div class="mini-card">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <path d="M12 21s7-5 7-10a7 7 0 10-14 0c0 5 7 10 7 10z"/>
-                <circle cx="12" cy="11" r="2.5"/>
-            </svg>
-            <div>
-                <strong>Букеты на заказ</strong>
-                <p class="muted-small" style="margin:.35rem 0 0;">Собираем под настроение и сезон.</p>
-            </div>
-        </div>
-        <div class="mini-card">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <path d="M4 20h16"/>
-                <path d="M8 16l2-6 3 4 3-8 2 10"/>
-            </svg>
-            <div>
-                <strong>Свадебная флористика</strong>
-                <p class="muted-small" style="margin:.35rem 0 0;">Арки, букеты, настольные композиции.</p>
-            </div>
-        </div>
-        <div class="mini-card">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <rect x="3" y="5" width="18" height="14" rx="2"/>
-                <path d="M7 15h4M7 11h10"/>
-            </svg>
-            <div>
-                <strong>Корпоративы</strong>
-                <p class="muted-small" style="margin:.35rem 0 0;">Декор премий, запусков и выставок.</p>
-            </div>
-        </div>
-        <div class="mini-card">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 7v5l3 2"/>
-            </svg>
-            <div>
-                <strong>Мастер-классы</strong>
-                <p class="muted-small" style="margin:.35rem 0 0;">Спокойный формат без спешки.</p>
-            </div>
-        </div>
-    </div>
-    <div style="margin-top:1.25rem;display:flex;flex-wrap:wrap;gap:.65rem;">
-        <NavLink class="btn btn-primary" href="/services" style="text-decoration:none;">Заказать букет</NavLink>
-        <NavLink class="btn btn-ghost" href="/services" style="text-decoration:none;">Перейти к услугам</NavLink>
-    </div>
-</section>
-
-<section class="card-panel">
-    <h2 style="margin-top:0;">Настроение</h2>
-    <p class="muted-small">Случайные кадры с Unsplash по тегу «flowers» — для живого ощущения студии.</p>
-    <div class="hero-grid">
-        @foreach (string url in _unsplash)
+@if (_highlights is not null)
+{
+    <section class="home-spotlight">
+        @if (_highlights.PopularBouquet is PopularBouquetHighlightDto bouquet)
         {
-            <div class="hero-tile">
-                <img src="@url" width="640" height="480" loading="lazy"
-                     alt="Цветочная композиция"/>
-            </div>
+            <article class="spotlight-card">
+                <p class="spotlight-kicker">Популярный букет месяца</p>
+                @{
+                    string img = string.IsNullOrWhiteSpace(bouquet.ImageUrl)
+                        ? $"https://picsum.photos/seed/bouquet-{bouquet.Id:N}/640/480"
+                        : bouquet.ImageUrl;
+                }
+                <img src="@img" alt="@bouquet.Name" class="spotlight-photo" loading="lazy"/>
+                <h2>@bouquet.Name</h2>
+                <p class="muted-small">@bouquet.Price.ToString("N0") ₽ · @_orderLabel(bouquet.OrderCount)</p>
+                <NavLink class="btn btn-primary" href="@($"/services/{bouquet.Id:D}")">Заказать</NavLink>
+            </article>
+        }
+
+        @if (_highlights.TopFlorist is TopFloristHighlightDto florist)
+        {
+            <article class="spotlight-card">
+                <p class="spotlight-kicker">Флорист месяца</p>
+                <img src="@florist.ImgUrl" alt="@florist.FullName" class="spotlight-photo portrait" loading="lazy"/>
+                <h2>@florist.FullName</h2>
+                <p class="muted-small">@florist.CompletedOrders @CompletedWord(florist.CompletedOrders) в этом месяце</p>
+                <NavLink class="btn btn-ghost" href="@($"/florists/{florist.Id:D}/portfolio")">Портфолио</NavLink>
+            </article>
+        }
+    </section>
+}
+
+<section class="home-quick card-panel">
+    <h2 style="margin-top:0;font-size:1.05rem;">Быстрые ссылки</h2>
+    <div class="home-quick-grid">
+        <NavLink class="home-quick-item" href="/services">
+            <strong>Каталог</strong>
+            <span class="muted-small">Букеты на заказ</span>
+        </NavLink>
+        <NavLink class="home-quick-item" href="/events">
+            <strong>Мероприятия</strong>
+            <span class="muted-small">Свадьбы и праздники</span>
+        </NavLink>
+        <NavLink class="home-quick-item" href="/florists">
+            <strong>Флористы</strong>
+            <span class="muted-small">Команда студии</span>
+        </NavLink>
+        @if (Session.IsClient)
+        {
+            <NavLink class="home-quick-item" href="/profile">
+                <strong>Счёт</strong>
+                <span class="muted-small">Баланс и карты</span>
+            </NavLink>
         }
     </div>
 </section>
 
-<section class="card-panel">
-    <h2 style="margin-top:0;">Контакты</h2>
-    <p>
-        <a href="mailto:hello@borealis-flowers.example" class="link-accent">hello@borealis-flowers.example</a>
-        · <a href="tel:+79990000000" class="link-accent">+7 999 000-00-00</a>
-    </p>
-    <p class="muted-small">
-        Соцсети:
-        <a class="link-accent" href="https://t.me/" target="_blank" rel="noreferrer">Telegram</a>,
-        <a class="link-accent" href="https://vk.com/" target="_blank" rel="noreferrer">VK</a>
-    </p>
+<section class="card-panel home-about">
+    <div class="two-column">
+        <div>
+            <h2 style="margin-top:0;">О студии</h2>
+            <p class="muted-small" style="line-height:1.55;">
+                Собираем букеты под настроение, оформляем свадьбы и корпоративы.
+                Спокойная палитра, аккуратная логистика и доставка по @StudioConstants.CityRegion.
+            </p>
+        </div>
+        <div>
+            <h3 style="margin-top:0;font-size:.95rem;">Контакты</h3>
+            <p class="muted-small" style="margin:0;">
+                <a href="mailto:@StudioConstants.ContactEmail" class="link-accent">@StudioConstants.ContactEmail</a><br/>
+                <a href="tel:@StudioConstants.ContactPhone.Replace(" ", "")" class="link-accent">@StudioConstants.ContactPhone</a>
+            </p>
+        </div>
+    </div>
 </section>
 
 @code {
 
-    readonly string[] _unsplash =
-    [
-        "https://source.unsplash.com/featured/640/480/?flowers&sig=1",
-        "https://source.unsplash.com/featured/640/480/?bouquet&sig=2",
-        "https://source.unsplash.com/featured/640/480/?peony&sig=3",
-    ];
+    HomeHighlightsDto? _highlights;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _highlights = await Api.Http.GetFromJsonAsync<HomeHighlightsDto>("home/highlights");
+        }
+        catch
+        {
+            _highlights = null;
+        }
+    }
+
+    static string _orderLabel(int count) =>
+        count switch
+        {
+            0 => "новинка сезона",
+            1 => "1 заказ в этом месяце",
+            _ => $"{count} заказов в этом месяце",
+        };
+
+    static string CompletedWord(int n)
+    {
+        int m = Math.Abs(n) % 100;
+        int n1 = m % 10;
+        if (m is > 10 and < 20) return "заказов";
+        return n1 switch { 1 => "заказ", 2 or 3 or 4 => "заказа", _ => "заказов" };
+    }
 
 }
